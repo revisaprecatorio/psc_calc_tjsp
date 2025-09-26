@@ -1,0 +1,9 @@
+fastapi==0.115.2
+uvicorn[standard]==0.30.6
+
+# Selenium e utilidades
+selenium==4.25.0
+
+# (opcional) Se você quiser usar webdriver-manager localmente:
+# webdriver-manager==4.0.2
+requests
