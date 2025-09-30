@@ -124,34 +124,21 @@ def _build_chrome(attach, user_data_dir, cert_issuer_cn, cert_subject_cn,
                   debugger_address=None, headless=False, download_dir="downloads"):
     """
     Cria o Chrome com:
-      - perfil (user_data_dir) ou ~/.pki (NSS com certificado A1)
+      - perfil (user_data_dir) se fornecido
       - prefs para FORÇAR DOWNLOAD de PDF (não abrir no viewer)
       - headless opcional
       - debuggerAddress (se fornecido)
     """
-    from pathlib import Path
-    from selenium import webdriver
-    from selenium.webdriver.chrome.options import Options
-    from selenium.common.exceptions import WebDriverException
-    import json, os
-
     def make_options():
         opts = Options()
-
-        # Perfil do Chrome → se não passar, usa ~/.pki (onde o entrypoint importou o cert A1)
         if user_data_dir:
             opts.add_argument(f"--user-data-dir={user_data_dir}")
             opts.add_argument("--profile-directory=Default")
-        else:
-            nss_profile = os.path.expanduser("~/.pki")
-            opts.add_argument(f"--user-data-dir={nss_profile}")
 
         # Headless + flags úteis para VPS
         if headless:
-            try:
-                opts.add_argument("--headless=new")
-            except Exception:
-                opts.add_argument("--headless")
+            try: opts.add_argument("--headless=new")
+            except Exception: opts.add_argument("--headless")
         opts.add_argument("--disable-gpu")
         opts.add_argument("--disable-dev-shm-usage")
         opts.add_argument("--no-sandbox")
@@ -159,21 +146,19 @@ def _build_chrome(attach, user_data_dir, cert_issuer_cn, cert_subject_cn,
         opts.add_argument("--no-default-browser-check")
         opts.add_argument("--window-size=1920,1080")
         opts.add_argument("--disable-blink-features=AutomationControlled")
-        opts.add_argument("--ignore-certificate-errors")
-        opts.add_argument("--allow-running-insecure-content")
 
-        # Força baixar PDF
+        # Preferências de download (FORÇA baixar PDF)
         Path(download_dir).mkdir(parents=True, exist_ok=True)
         prefs = {
             "download.default_directory": str(Path(download_dir).resolve()),
             "download.prompt_for_download": False,
             "download.directory_upgrade": True,
             "safebrowsing.enabled": True,
-            "plugins.always_open_pdf_externally": True,
+            "plugins.always_open_pdf_externally": True,  # baixa PDF em vez de abrir viewer
         }
         opts.add_experimental_option("prefs", prefs)
 
-        # Auto-seleção de certificado para o TJSP
+        # Auto-seleção de certificado (opcional)
         if cert_issuer_cn or cert_subject_cn:
             policy = {"pattern": "https://esaj.tjsp.jus.br", "filter": {}}
             if cert_issuer_cn:
@@ -182,22 +167,18 @@ def _build_chrome(attach, user_data_dir, cert_issuer_cn, cert_subject_cn,
                 policy["filter"].setdefault("SUBJECT", {})["CN"] = cert_subject_cn
             opts.add_argument("--auto-select-certificate-for-urls=" + json.dumps([policy]))
 
-        # Usa o Chromium do container
-        opts.binary_location = os.environ.get("CHROME_BIN", "/usr/bin/chromium")
-
         return opts
 
+    import os as _os
     if not debugger_address:
-        debugger_address = os.environ.get("DEBUGGER_ADDRESS")
+        debugger_address = _os.environ.get("DEBUGGER_ADDRESS")
 
     # Tenta anexar via debuggerAddress
     if debugger_address:
         try:
             opts = make_options()
             opts.add_experimental_option("debuggerAddress", debugger_address)
-            d = webdriver.Chrome(options=opts)
-            d.set_page_load_timeout(60)
-            return d
+            d = webdriver.Chrome(options=opts); d.set_page_load_timeout(60); return d
         except WebDriverException as e:
             print(f"[WARN] Falha ao anexar em {debugger_address}: {e}. Abrindo Chrome novo…")
 
@@ -205,9 +186,7 @@ def _build_chrome(attach, user_data_dir, cert_issuer_cn, cert_subject_cn,
     opts = make_options()
     if attach:
         opts.add_argument("--remote-allow-origins=*")
-    d = webdriver.Chrome(options=opts)
-    d.set_page_load_timeout(60)
-    return d
+    d = webdriver.Chrome(options=opts); d.set_page_load_timeout(60); return d
 
 # ------------------------------------------------------------
 # CAS / Login
@@ -906,16 +885,52 @@ def _force_open_download_url(driver, payload=None) -> bool:
     return False
 
 def _await_new_pdf(download_dir: Path, before_set: set, timeout: int, payload=None) -> str | None:
+    """
+    Aguarda um novo arquivo PDF aparecer no diretório de download.
+    O arquivo não deve ser um .crdownload temporário e deve ter um tamanho > 0.
+    """
     end = time.time() + timeout
     while time.time() < end:
-        pdfs = [p for p in download_dir.glob("*.pdf") if p.name not in before_set]
-        final = [p for p in pdfs if not (download_dir / (p.name + ".crdownload")).exists()]
-        if final:
-            final.sort(key=lambda p: p.stat().st_mtime, reverse=True)
-            if payload: debug(payload, f"PDF detectado: {final[0].name}")
-            return str(final[0])
-        time.sleep(0.4)
-    if payload: debug(payload, "PDF não apareceu dentro do timeout.")
+        # Encontra todos os arquivos .pdf no diretório
+        all_pdfs = list(download_dir.glob("*.pdf"))
+
+        # Filtra por arquivos novos, criados durante esta execução
+        new_pdfs = [p for p in all_pdfs if p.name not in before_set]
+
+        if not new_pdfs:
+            time.sleep(0.5)
+            continue
+
+        # Verifica os arquivos novos para ver se estão completos e com conteúdo
+        completed_files = []
+        for p in new_pdfs:
+            try:
+                # Um arquivo é considerado completo se:
+                # 1. Existe
+                # 2. Tem tamanho maior que 0 bytes
+                # 3. Seu arquivo .crdownload correspondente não existe mais
+                if p.exists() and p.stat().st_size > 0 and not (download_dir / (p.name + ".crdownload")).exists():
+                    completed_files.append(p)
+            except (FileNotFoundError, Exception):
+                # Ignora erros de arquivos que podem desaparecer durante a verificação
+                pass
+
+        if completed_files:
+            # Se múltiplos arquivos terminaram, retorna o mais recente
+            completed_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+            newest_file = completed_files[0]
+            if payload:
+                debug(payload, f"Download concluído: {newest_file.name} ({newest_file.stat().st_size} bytes)")
+            
+            # Espera um breve momento para garantir que o navegador liberou o arquivo
+            time.sleep(1) 
+            return str(newest_file.resolve())
+
+        # Se nenhum arquivo completo foi encontrado ainda, espera e tenta novamente
+        time.sleep(0.5)
+
+    if payload:
+        debug(payload, f"Timeout: Nenhum PDF novo e completo foi encontrado em {timeout} segundos.")
     return None
 
 # ------------------------------------------------------------
@@ -1184,6 +1199,13 @@ def _close_extra_tabs(driver, baseline_handles, payload=None):
 # ------------------------------------------------------------
 # Fluxo principal
 # ------------------------------------------------------------
+# Em crawler_full.py
+
+# ... (todo o código anterior permanece o mesmo) ...
+
+# ------------------------------------------------------------
+# Fluxo principal
+# ------------------------------------------------------------
 def go_and_extract(doc_number=None, attach=False, user_data_dir=None,
                    cert_issuer_cn=None, cert_subject_cn=None,
                    debugger_address=None, cas_usuario=None, cas_senha=None,
@@ -1192,7 +1214,7 @@ def go_and_extract(doc_number=None, attach=False, user_data_dir=None,
                    headless=False):
     label_input = process_number if process_number else doc_number
     payload = {"documento": doc_number, "processo": process_number, "ok": False, "has_precatorio": False,
-               "found_process_numbers": [], "results": [], "error": None,
+               "found_process_numbers": [], "results": [], "error": None, "downloaded_files": [],
                "started_at": _now_str(), "finished_at": None}
     t0 = time.perf_counter()
     driver = None
@@ -1203,7 +1225,8 @@ def go_and_extract(doc_number=None, attach=False, user_data_dir=None,
             attach, user_data_dir, cert_issuer_cn, cert_subject_cn,
             debugger_address=debugger_address, headless=headless, download_dir=download_dir
         )
-        wait = WebDriverWait(driver, 30); driver.set_script_timeout(120)
+        ### MUDANÇA 1: Aumentar o tempo de espera padrão para acomodar downloads lentos ###
+        wait = WebDriverWait(driver, 60); driver.set_script_timeout(300)
 
         # abas existentes no início
         try:
@@ -1226,7 +1249,7 @@ def go_and_extract(doc_number=None, attach=False, user_data_dir=None,
             raise TimeoutException("Não consegui acionar o 'Consultar'.")
         debug(payload, "Consulta enviada.")
 
-        kind = _wait_result_page(driver, timeout=45, payload=payload)
+        kind = _wait_result_page(driver, timeout=60, payload=payload)
         if kind == "lista":
             processos = driver.find_elements(By.CSS_SELECTOR, "a.linkProcesso, a[class*='numeroProcesso']")
             found = _extract_process_numbers_from_elements(processos)
@@ -1243,8 +1266,10 @@ def go_and_extract(doc_number=None, attach=False, user_data_dir=None,
                 if abrir_autos and baixar_pdf and data.get("link_pasta_digital"):
                     _open_pasta_digital(wait, driver, data["link_pasta_digital"], payload)
                     try:
-                        files = _baixar_todos_pasta_digital(wait, driver, Path(download_dir), payload, turbo_download=turbo_download)
-                        #payload.setdefault("downloaded_files1", []).extend(files)
+                        ### MUDANÇA 2: Aumentar o timeout do download para 300s (5 minutos) ###
+                        files = _baixar_todos_pasta_digital(wait, driver, Path(download_dir), payload, timeout=300, turbo_download=turbo_download)
+                        ### MUDANÇA 3: Descomentar a linha para registrar os arquivos baixados ###
+                        payload.setdefault("downloaded_files", []).extend(files)
                     except Exception as e:
                         payload.setdefault("download_errors", []).append(str(e))
         else:
@@ -1253,17 +1278,23 @@ def go_and_extract(doc_number=None, attach=False, user_data_dir=None,
         ts = _ts_str()
         safe = _slug(label_input)
         scr = OUTPUT_DIR / f"screenshot_{safe}_{ts}.png"
-        ##driver.save_screenshot(str(scr))
-        #payload.update({"ok": True, "screenshot_path": str(scr), "last_url": driver.current_url})
+        driver.save_screenshot(str(scr))
+        
+        ### MUDANÇA 4: Descomentar a linha para marcar a operação como SUCESSO (`ok: True`) ###
+        payload.update({"ok": True, "screenshot_path": str(scr), "last_url": driver.current_url})
+        
         if payload.get("has_precatorio") or "consultaDeRequisitorios" in driver.current_url:
             payload["has_precatorio"] = True
+            
         payload["finished_at"] = _now_str()
         elapsed = time.perf_counter() - t0
         payload["duration_seconds"] = round(elapsed, 3)
-        #payload["duration_hms"] = _fmt_duration(elapsed)
+        ### MUDANÇA 5: Descomentar a linha de duração formatada (opcional, mas bom ter) ###
+        payload["duration_hms"] = _fmt_duration(elapsed)
         return payload
 
     except Exception as e:
+        # O bloco de erro permanece o mesmo
         payload["error"] = f"{e.__class__.__name__}: {e}\n{traceback.format_exc()}"
         try: payload["last_url"] = driver.current_url if driver else None
         except: payload["last_url"] = None
@@ -1275,7 +1306,7 @@ def go_and_extract(doc_number=None, attach=False, user_data_dir=None,
                 with open(p_html, "w", encoding="utf-8") as f: f.write(driver.page_source)
                 payload["error_html_path"] = str(p_html)
                 p_png = OUTPUT_DIR / f"erro_{safe}_{ts}.png"
-                ##driver.save_screenshot(str(p_png))
+                driver.save_screenshot(str(p_png))
                 payload["error_screenshot_path"] = str(p_png)
         except Exception: pass
         payload["finished_at"] = _now_str()
@@ -1284,20 +1315,17 @@ def go_and_extract(doc_number=None, attach=False, user_data_dir=None,
         payload["duration_hms"] = _fmt_duration(elapsed)
         return payload
     finally:
-        # Fecha abas criadas pelo crawler
+        # O bloco finally permanece o mesmo
         try:
             if driver:
                 _close_extra_tabs(driver, baseline_handles, payload)
         except Exception:
             pass
-
-        # Encerra o Chrome: se não estamos anexados a um Chrome externo, podemos fechar tudo
         try:
             if driver:
                 if not debugger_address:
-                    driver.quit()  # encerra o processo inteiro iniciado pelo Selenium
+                    driver.quit()
                 else:
-                    # Chrome externo (debugger): não encerramos o browser do usuário
                     try:
                         driver.close()
                     except Exception:

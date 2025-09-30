@@ -1,4 +1,4 @@
-# Dockerfile (Chrome oficial + Selenium Manager)
+# Dockerfile para rodar o WORKER (orchestrator_subprocess.py)
 FROM python:3.12-slim-bookworm
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -6,7 +6,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     TZ=America/Sao_Paulo \
     CHROME_BIN=/usr/bin/chromium
 
-# instalar dependências do sistema + chromium + ferramentas de certificados
+# Instala dependências do sistema + chromium
 RUN apt-get update && apt-get install -y --no-install-recommends \
     wget ca-certificates gnupg2 unzip fonts-liberation \
     libnss3-tools openssl chromium \
@@ -15,16 +15,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# instalar dependências python
+# Instala dependências python
 COPY requirements.txt /app/
 RUN pip install --upgrade pip
 RUN pip install -r requirements.txt
 
-# copiar código e entrypoint
-COPY . /app
-COPY entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
+# Copia todo o código da aplicação
+COPY . /app/
 
-EXPOSE 8000
+# --- MUDANÇAS AQUI ---
+# 1. A linha EXPOSE 8000 foi removida, pois não é um servidor web.
+# 2. O ENTRYPOINT agora chama o script python diretamente.
+#    As linhas que copiavam e davam permissão ao entrypoint.sh foram removidas.
 
-ENTRYPOINT ["/app/entrypoint.sh"]
+ENTRYPOINT ["python", "orchestrator_subprocess.py"]

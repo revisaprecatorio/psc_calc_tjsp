@@ -7,3 +7,4 @@ selenium==4.25.0
 # (opcional) Se você quiser usar webdriver-manager localmente:
 # webdriver-manager==4.0.2
 requests
+psycopg2
