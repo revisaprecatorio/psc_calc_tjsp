@@ -1,17 +1,35 @@
+# docker-compose.yml atualizado para o worker
+
 version: "3.9"
 
 services:
-  revisa:
-    image: revisa-crawler:latest
+  # O nome do serviço pode ser o que você preferir
+  worker:
+    # Constrói a imagem a partir do Dockerfile local
     build: .
-    container_name: revisa
-    ports:
-      - "8000:8000"
+    # Define um nome para a imagem construída
+    image: tjsp-worker:latest
+    # Define um nome para o contêiner em execução
+    container_name: tjsp_worker_1
+    
+    # Adicionado para carregar todas as variáveis do arquivo .env
+    # Esta é a melhor forma de gerenciar segredos e configurações
+    env_file:
+      - .env
+
+    # Mapeia pastas locais para dentro do contêiner para persistir dados
     volumes:
-      - ./downloads:/data/downloads
+      - ./downloads:/app/downloads
+      - ./screenshots:/app/screenshots
+      - ./chrome_profile:/app/chrome_profile
+      # Mantido o volume de certificados, caso seu crawler precise
       - ./certs:/app/certs
-    environment:
-      - CERT_PASS=903205
-      - TZ=America/Sao_Paulo
-    shm_size: 1g
+      
+    # Essencial para o Chromium/Selenium não travar
+    shm_size: '2gb' # Aumentado para 2gb como boa prática para crawlers
+
+    # Política de reinício: o contêiner sempre será reiniciado
+    # a menos que você o pare manualmente. Perfeito para um worker.
     restart: unless-stopped
+
+# A seção 'ports' foi REMOVIDA, pois o worker não é um servidor web.
