@@ -35,8 +35,9 @@ def fetch_precatorios_from_db():
         query = """
             SELECT id, cpf, processos 
             FROM consultas_esaj 
-            WHERE status= 'false'
-            ORDER BY id ;
+            WHERE status = FALSE OR status IS NULL
+            ORDER BY id 
+            LIMIT 1;
         """
         
         print(f"Executando a query para buscar o próximo item da fila...")
@@ -86,7 +87,7 @@ def update_status_in_db(job_id_to_update):
         conn = psycopg2.connect(**DB_CONFIG)
         cur = conn.cursor()
         
-        query = "UPDATE consultas_esaj SET status =true WHERE id = %s;"
+        query = "UPDATE consultas_esaj SET status = TRUE WHERE id = %s;"
         
         cur.execute(query, (job_id_to_update,))
         
