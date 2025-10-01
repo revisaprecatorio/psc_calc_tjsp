@@ -1,0 +1,73 @@
+root@srv987902:/opt/crawler_tjsp# docker compose down
+WARN[0000] /opt/crawler_tjsp/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] Running 2/2
+ ✔ Container tjsp_worker_1       Removed                                                                    0.0s 
+ ✔ Network crawler_tjsp_default  Removed                                                                    0.1s 
+root@srv987902:/opt/crawler_tjsp# git pull origin main
+remote: Enumerating objects: 8, done.
+remote: Counting objects: 100% (8/8), done.
+remote: Compressing objects: 100% (3/3), done.
+remote: Total 6 (delta 3), reused 6 (delta 3), pack-reused 0 (from 0)
+Unpacking objects: 100% (6/6), 4.17 KiB | 1.39 MiB/s, done.
+From https://github.com/revisaprecatorio/crawler_tjsp
+ * branch            main       -> FETCH_HEAD
+   eb39a27..136de15  main       -> origin/main
+Updating eb39a27..136de15
+Fast-forward
+ DEPLOY_TRACKING.md         | 320 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ orchestrator_subprocess.py |   7 +-
+ 2 files changed, 324 insertions(+), 3 deletions(-)
+ create mode 100644 DEPLOY_TRACKING.md
+root@srv987902:/opt/crawler_tjsp# docker compose build
+WARN[0000] /opt/crawler_tjsp/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+#1 [internal] load local bake definitions
+#1 reading from stdin 496B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 1.08kB done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/python:3.12-slim-bookworm
+#3 DONE 0.8s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 2B done
+#4 DONE 0.0s
+
+#5 [1/7] FROM docker.io/library/python:3.12-slim-bookworm@sha256:25c2d6d3b4680597f42caabe8b3ade05a60bba86547cb219356d5774ab319a8a
+#5 DONE 0.0s
+
+#6 [internal] load build context
+#6 transferring context: 31.99kB done
+#6 DONE 0.0s
+
+#7 [4/7] COPY requirements.txt /app/
+#7 CACHED
+
+#8 [2/7] RUN apt-get update && apt-get install -y --no-install-recommends     wget ca-certificates gnupg2 unzip fonts-liberation     libnss3-tools openssl chromium     libnss3 libxss1 libasound2 libatk1.0-0 libgtk-3-0 libgbm1 libx11-xcb1   && rm -rf /var/lib/apt/lists/*
+#8 CACHED
+
+#9 [5/7] RUN pip install --upgrade pip
+#9 CACHED
+
+#10 [3/7] WORKDIR /app
+#10 CACHED
+
+#11 [6/7] RUN pip install -r requirements.txt
+#11 CACHED
+
+#12 [7/7] COPY . /app/
+#12 DONE 0.0s
+
+#13 exporting to image
+#13 exporting layers 0.0s done
+#13 writing image sha256:2f01351b14bdc4b39771e021de0bba0984ed86a5fa38bd16008aa969c255e937 done
+#13 naming to docker.io/library/tjsp-worker:latest done
+#13 DONE 0.0s
+
+#14 resolving provenance for metadata file
+#14 DONE 0.0s
+[+] Building 1/1
+ ✔ tjsp-worker:latest  Built                                                                                0.0s 
+root@srv987902:/opt/crawler_tjsp# 

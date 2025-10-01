@@ -228,6 +228,71 @@ docker compose logs -f worker
 
 ---
 
+### **6. Problema: Selenium Não Baixa PDFs**
+**Data:** 2025-10-01 02:30  
+**Problema:**
+- Worker processava jobs com sucesso
+- Status era atualizado no banco
+- Mas nenhum PDF era baixado (diretórios vazios)
+- Não havia mensagens de erro nos logs
+
+**Causa Raiz:**
+O orchestrator executava `crawler_full.py` com `capture_output=True` mas **não imprimia o stdout**, então erros do Selenium ficavam ocultos.
+
+**Solução Aplicada:**
+```python
+# orchestrator_subprocess.py
+result = subprocess.run(command, capture_output=True, ...)
+
+# ADICIONADO: Imprimir stdout para debug
+if result.stdout:
+    print("\n--- Output do Crawler ---")
+    print(result.stdout)
+    print("--- Fim do Output ---\n")
+```
+
+**Commit:** `7ac6755` → Adiciona output do crawler nos logs
+
+**Status:** ✅ Resolvido - Agora vemos erros do Selenium
+
+---
+
+### **7. Erro: Chrome user-data-dir Already in Use**
+**Data:** 2025-10-01 02:42  
+**Problema:**
+```
+SessionNotCreatedException: user data directory is already in use
+```
+
+**Causa Raiz:**
+- Múltiplas execuções do crawler tentavam usar o mesmo `--user-data-dir`
+- Chrome cria locks de arquivo que persistem entre execuções
+- Mesmo com diretórios únicos, o problema persistia
+
+**Tentativas de Solução:**
+1. ❌ Criar diretório único por execução (`chrome_profile_{job_id}_{i}_{timestamp}`)
+2. ✅ **Remover completamente o argumento `--user-data-dir`**
+
+**Solução Final:**
+```python
+# ANTES
+command = [..., "--user-data-dir", chrome_profile_path]
+
+# DEPOIS
+command = [...]  # SEM --user-data-dir
+# Chrome cria perfil temporário automaticamente
+```
+
+**Commits:**
+- `9cce20c` → Tentativa com diretório único (não resolveu)
+- `dc5bf3e` → Remove user-data-dir completamente
+
+**Status:** ⚠️ **PROBLEMA PERSISTE** - Investigação em andamento
+
+**Observação:** O erro continua mesmo sem `--user-data-dir`. Isso indica que o problema pode estar no próprio `crawler_full.py` que ainda está passando o argumento internamente.
+
+---
+
 ## 📦 Arquivos Modificados
 
 ### **requirements.txt**

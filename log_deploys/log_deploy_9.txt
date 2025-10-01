@@ -1,0 +1,101 @@
+Conclusão: 
+O crawler_full.py está sendo chamado, mas o Selenium/Chromium não está funcionando ou está falhando silenciosamente.
+
+🔍 Próximo Passo: Executar Crawler Manualmente para Ver Erros
+Precisamos entrar no container e executar o crawler diretamente para ver o que está acontecendo:
+
+root@srv987902:/opt/crawler_tjsp# psql -h 72.60.62.124 -p 5432 -U admin -d n8n << EOF
+> UPDATE consultas_esaj SET status = FALSE WHERE id = 27;
+EOF
+Password for user admin: 
+UPDATE 1
+root@srv987902:/opt/crawler_tjsp# docker compose up -d
+WARN[0000] /opt/crawler_tjsp/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] Running 1/1
+ ✔ Container tjsp_worker_1  Started                                              0.2s 
+root@srv987902:/opt/crawler_tjsp# sleep 5
+root@srv987902:/opt/crawler_tjsp# docker exec -it tjsp_worker_1 bash
+Error response from daemon: container cd52783f78c5ffac0c9ddbf89b9323bdbca42576464234005d5add9763f1c641 is not running
+root@srv987902:/opt/crawler_tjsp# python3 crawler_full.py \
+  --doc 0077044-50.2023.8.26.0500 \
+  --abrir-autos \
+  --baixar-pdf \
+  --turbo-download \
+  --download-dir /app/downloads/teste_manual \
+  --user-data-dir /app/chrome_profile
+/opt/crawler_tjsp/crawler_full.py:1087: SyntaxWarning: invalid escape sequence '\s'
+  js = """
+Traceback (most recent call last):
+  File "/opt/crawler_tjsp/crawler_full.py", line 21, in <module>
+    from selenium import webdriver
+ModuleNotFoundError: No module named 'selenium'
+root@srv987902:/opt/crawler_tjsp# docker compose down
+WARN[0000] /opt/crawler_tjsp/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] Running 2/2
+ ✔ Container tjsp_worker_1       Removed                                         0.0s 
+ ✔ Network crawler_tjsp_default  Removed                                         0.1s 
+root@srv987902:/opt/crawler_tjsp# docker compose run --rm -it worker bash
+WARN[0000] /opt/crawler_tjsp/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] Creating 1/1
+ ✔ Network crawler_tjsp_default  Created                                         0.1s 
+Conectando ao banco de dados PostgreSQL...
+Executando a query para buscar o próximo item da fila...
+Conexão com o banco de dados fechada.
+Nenhum precatório novo para processar encontrado. Encerrando o worker.
+root@srv987902:/opt/crawler_tjsp# docker compose down
+WARN[0000] /opt/crawler_tjsp/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] Running 1/1
+ ✔ Network crawler_tjsp_default  Removed                                         0.1s 
+root@srv987902:/opt/crawler_tjsp# psql -h 72.60.62.124 -p 5432 -U admin -d n8n << EOF
+UPDATE consultas_esaj SET status = FALSE WHERE id = 27;
+EOF
+Password for user admin: 
+UPDATE 1
+root@srv987902:/opt/crawler_tjsp# docker compose run --rm -it worker bash
+WARN[0000] /opt/crawler_tjsp/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] Creating 1/1
+ ✔ Network crawler_tjsp_default  Created                                         0.1s 
+Conectando ao banco de dados PostgreSQL...
+Executando a query para buscar o próximo item da fila...
+Item encontrado para processar: ID=27, CPF=07620857893
+Conexão com o banco de dados fechada.
+
+================================================================================
+Processando item 1/1 do Job ID=27: Processo 0077044-50.2023.8.26.0500
+================================================================================
+Executando comando: /usr/local/bin/python crawler_full.py --doc 0077044-50.2023.8.26.0500 --abrir-autos --baixar-pdf --turbo-download --download-dir /app/downloads/07620857893 --user-data-dir /app/chrome_profile
+
+Atualizando status para 'processado = TRUE' para o ID: 27
+[SUCESSO] Status atualizado para o ID 27.
+Conectando ao banco de dados PostgreSQL...
+Executando a query para buscar o próximo item da fila...
+Conexão com o banco de dados fechada.
+Nenhum precatório novo para processar encontrado. Encerrando o worker.
+root@srv987902:/opt/crawler_tjsp# python3 crawler_full.py \
+  --doc 0077044-50.2023.8.26.0500 \
+  --abrir-autos \
+  --baixar-pdf \
+  --download-dir /app/downloads/teste_debug \
+  --user-data-dir /app/chrome_profile
+/opt/crawler_tjsp/crawler_full.py:1087: SyntaxWarning: invalid escape sequence '\s'
+  js = """
+Traceback (most recent call last):
+  File "/opt/crawler_tjsp/crawler_full.py", line 21, in <module>
+    from selenium import webdriver
+ModuleNotFoundError: No module named 'selenium'
+root@srv987902:/opt/crawler_tjsp# cat /tmp/crawler_output.log
+cat: /tmp/crawler_output.log: No such file or directory
+root@srv987902:/opt/crawler_tjsp# 
+
+
+🔍 Problema Identificado: Orchestrator Não Mostra Output do Crawler
+O 
+orchestrator_subprocess.py
+ está executando o 
+crawler_full.py
+ mas não está capturando/mostrando o output. Por isso não vemos erros!
+
+🎯 Solução: Modificar Orchestrator para Mostrar Output
+Vamos verificar o código do orchestrator e modificá-lo para capturar o stdout/stderr do crawler:
+
+Encontrei o problema! O orchestrator está usando capture_output=True mas não está imprimindo o stdout do crawler. Vamos corrigir:

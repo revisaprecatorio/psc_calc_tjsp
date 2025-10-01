@@ -1,0 +1,270 @@
+root@srv987902:/opt/crawler_tjsp# psql -h 72.60.62.124 -p 5432 -U admin -d n8n
+Password for user admin: 
+psql (16.10 (Ubuntu 16.10-0ubuntu0.24.04.1))
+SSL connection (protocol: TLSv1.3, cipher: TLS_AES_256_GCM_SHA384, compression: off)
+Type "help" for help.
+
+n8n=> SELECT COUNT(*) as total FROM consultas_esaj;
+ total 
+-------
+     9
+(1 row)
+
+n8n=> SELECT COUNT(*) as processados FROM consultas_esaj WHERE status = TRUE;
+ processados 
+-------------
+           9
+(1 row)
+
+n8n=> UPDATE consultas_esaj SET status = FALSE;
+UPDATE 9
+n8n=> SELECT 
+    COUNT(*) as total,
+    COUNT(*) FILTER (WHERE status = TRUE) as processados,
+    COUNT(*) FILTER (WHERE status = FALSE OR status IS NULL) as pendentes
+FROM consultas_esaj;
+ total | processados | pendentes 
+-------+-------------+-----------
+     9 |           0 |         9
+(1 row)
+
+n8n=> SELECT id, cpf, status FROM consultas_esaj WHERE status = FALSE ORDER BY id LIMIT 5;
+ id |     cpf     | status 
+----+-------------+--------
+ 24 | 02174781824 | f
+ 25 | 03730461893 | f
+ 26 | 01103192817 | f
+ 27 | 07620857893 | f
+ 28 | 06495530803 | f
+(5 rows)
+
+n8n=> \q
+root@srv987902:/opt/crawler_tjsp# docker compose up -d
+WARN[0000] /opt/crawler_tjsp/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] Running 1/1
+ ✔ Container tjsp_worker_1  Started                                              0.2s 
+root@srv987902:/opt/crawler_tjsp# sleep 3
+root@srv987902:/opt/crawler_tjsp# docker compose logs -f worker
+WARN[0000] /opt/crawler_tjsp/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Item encontrado para processar: ID=24, CPF=02174781824
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | 
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Processando item 1/2 do Job ID=24: Processo 0221031-18.2021.8.26.0500
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Executando comando: /usr/local/bin/python crawler_full.py --doc 0221031-18.2021.8.26.0500 --abrir-autos --baixar-pdf --turbo-download --download-dir /app/downloads/02174781824 --user-data-dir /app/chrome_profile
+tjsp_worker_1  | 
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Processando item 2/2 do Job ID=24: Processo 0176505-63.2021.8.26.0500
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Executando comando: /usr/local/bin/python crawler_full.py --doc 0176505-63.2021.8.26.0500 --abrir-autos --baixar-pdf --turbo-download --download-dir /app/downloads/02174781824 --user-data-dir /app/chrome_profile
+tjsp_worker_1  | 
+tjsp_worker_1  | Atualizando status para 'processado = TRUE' para o ID: 24
+tjsp_worker_1  | [SUCESSO] Status atualizado para o ID 24.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Item encontrado para processar: ID=25, CPF=03730461893
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | 
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Processando item 1/6 do Job ID=25: Processo 0220341-86.2021.8.26.0500
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Executando comando: /usr/local/bin/python crawler_full.py --doc 0220341-86.2021.8.26.0500 --abrir-autos --baixar-pdf --turbo-download --download-dir /app/downloads/03730461893 --user-data-dir /app/chrome_profile
+tjsp_worker_1  | 
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Processando item 2/6 do Job ID=25: Processo 0176522-02.2021.8.26.0500
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Executando comando: /usr/local/bin/python crawler_full.py --doc 0176522-02.2021.8.26.0500 --abrir-autos --baixar-pdf --turbo-download --download-dir /app/downloads/03730461893 --user-data-dir /app/chrome_profile
+tjsp_worker_1  | 
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Processando item 3/6 do Job ID=25: Processo 0077658-31.2018.8.26.0500
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Executando comando: /usr/local/bin/python crawler_full.py --doc 0077658-31.2018.8.26.0500 --abrir-autos --baixar-pdf --turbo-download --download-dir /app/downloads/03730461893 --user-data-dir /app/chrome_profile
+tjsp_worker_1  | 
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Processando item 4/6 do Job ID=25: Processo 0068067-16.2016.8.26.0500
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Executando comando: /usr/local/bin/python crawler_full.py --doc 0068067-16.2016.8.26.0500 --abrir-autos --baixar-pdf --turbo-download --download-dir /app/downloads/03730461893 --user-data-dir /app/chrome_profile
+tjsp_worker_1  | 
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Processando item 5/6 do Job ID=25: Processo 0043938-44.2016.8.26.0500
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Executando comando: /usr/local/bin/python crawler_full.py --doc 0043938-44.2016.8.26.0500 --abrir-autos --baixar-pdf --turbo-download --download-dir /app/downloads/03730461893 --user-data-dir /app/chrome_profile
+tjsp_worker_1  | 
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Processando item 6/6 do Job ID=25: Processo 0037256-10.2015.8.26.0500
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Executando comando: /usr/local/bin/python crawler_full.py --doc 0037256-10.2015.8.26.0500 --abrir-autos --baixar-pdf --turbo-download --download-dir /app/downloads/03730461893 --user-data-dir /app/chrome_profile
+tjsp_worker_1  | 
+tjsp_worker_1  | Atualizando status para 'processado = TRUE' para o ID: 25
+tjsp_worker_1  | [SUCESSO] Status atualizado para o ID 25.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Item encontrado para processar: ID=26, CPF=01103192817
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | 
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Processando item 1/1 do Job ID=26: Processo 0015266-16.2022.8.26.0500
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Executando comando: /usr/local/bin/python crawler_full.py --doc 0015266-16.2022.8.26.0500 --abrir-autos --baixar-pdf --turbo-download --download-dir /app/downloads/01103192817 --user-data-dir /app/chrome_profile
+tjsp_worker_1  | 
+tjsp_worker_1  | Atualizando status para 'processado = TRUE' para o ID: 26
+tjsp_worker_1  | [SUCESSO] Status atualizado para o ID 26.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Item encontrado para processar: ID=27, CPF=07620857893
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | 
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Processando item 1/1 do Job ID=27: Processo 0077044-50.2023.8.26.0500
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Executando comando: /usr/local/bin/python crawler_full.py --doc 0077044-50.2023.8.26.0500 --abrir-autos --baixar-pdf --turbo-download --download-dir /app/downloads/07620857893 --user-data-dir /app/chrome_profile
+tjsp_worker_1  | 
+tjsp_worker_1  | Atualizando status para 'processado = TRUE' para o ID: 27
+tjsp_worker_1  | [SUCESSO] Status atualizado para o ID 27.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Item encontrado para processar: ID=28, CPF=06495530803
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | 
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Processando item 1/3 do Job ID=28: Processo 0223266-55.2021.8.26.0500
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Executando comando: /usr/local/bin/python crawler_full.py --doc 0223266-55.2021.8.26.0500 --abrir-autos --baixar-pdf --turbo-download --download-dir /app/downloads/06495530803 --user-data-dir /app/chrome_profile
+tjsp_worker_1  | 
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Processando item 2/3 do Job ID=28: Processo 0179487-50.2021.8.26.0500
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Executando comando: /usr/local/bin/python crawler_full.py --doc 0179487-50.2021.8.26.0500 --abrir-autos --baixar-pdf --turbo-download --download-dir /app/downloads/06495530803 --user-data-dir /app/chrome_profile
+tjsp_worker_1  | 
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Processando item 3/3 do Job ID=28: Processo 7007473-24.2010.8.26.0500
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Executando comando: /usr/local/bin/python crawler_full.py --doc 7007473-24.2010.8.26.0500 --abrir-autos --baixar-pdf --turbo-download --download-dir /app/downloads/06495530803 --user-data-dir /app/chrome_profile
+tjsp_worker_1  | 
+tjsp_worker_1  | Atualizando status para 'processado = TRUE' para o ID: 28
+tjsp_worker_1  | [SUCESSO] Status atualizado para o ID 28.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Item encontrado para processar: ID=29, CPF=27308157830
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | 
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Processando item 1/2 do Job ID=29: Processo 0158003-37.2025.8.26.0500
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Executando comando: /usr/local/bin/python crawler_full.py --doc 0158003-37.2025.8.26.0500 --abrir-autos --baixar-pdf --turbo-download --download-dir /app/downloads/27308157830 --user-data-dir /app/chrome_profile
+tjsp_worker_1  | 
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Processando item 2/2 do Job ID=29: Processo 0015796-15.2025.8.26.0500
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Executando comando: /usr/local/bin/python crawler_full.py --doc 0015796-15.2025.8.26.0500 --abrir-autos --baixar-pdf --turbo-download --download-dir /app/downloads/27308157830 --user-data-dir /app/chrome_profile
+tjsp_worker_1  | 
+tjsp_worker_1  | Atualizando status para 'processado = TRUE' para o ID: 29
+tjsp_worker_1  | [SUCESSO] Status atualizado para o ID 29.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Item encontrado para processar: ID=30, CPF=07620857893
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | 
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Processando item 1/1 do Job ID=30: Processo 0077044-50.2023.8.26.0500
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Executando comando: /usr/local/bin/python crawler_full.py --doc 0077044-50.2023.8.26.0500 --abrir-autos --baixar-pdf --turbo-download --download-dir /app/downloads/07620857893 --user-data-dir /app/chrome_profile
+tjsp_worker_1  | 
+tjsp_worker_1  | Atualizando status para 'processado = TRUE' para o ID: 30
+tjsp_worker_1  | [SUCESSO] Status atualizado para o ID 30.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Item encontrado para processar: ID=31, CPF=07620857893
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | 
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Processando item 1/1 do Job ID=31: Processo 0077044-50.2023.8.26.0500
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Executando comando: /usr/local/bin/python crawler_full.py --doc 0077044-50.2023.8.26.0500 --abrir-autos --baixar-pdf --turbo-download --download-dir /app/downloads/07620857893 --user-data-dir /app/chrome_profile
+tjsp_worker_1  | 
+tjsp_worker_1  | Atualizando status para 'processado = TRUE' para o ID: 31
+tjsp_worker_1  | [SUCESSO] Status atualizado para o ID 31.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Item encontrado para processar: ID=32, CPF=07620857893
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | 
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Processando item 1/1 do Job ID=32: Processo 0077044-50.2023.8.26.0500
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Executando comando: /usr/local/bin/python crawler_full.py --doc 0077044-50.2023.8.26.0500 --abrir-autos --baixar-pdf --turbo-download --download-dir /app/downloads/07620857893 --user-data-dir /app/chrome_profile
+tjsp_worker_1  | 
+tjsp_worker_1  | Atualizando status para 'processado = TRUE' para o ID: 32
+tjsp_worker_1  | [SUCESSO] Status atualizado para o ID 32.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+
+🎉 EXCELENTE! Worker Processou TODOS os 9 Jobs com Sucesso!
+✅ Resumo do Processamento:
+✅ Job ID=24 (CPF: 02174781824) → 2 processos → Status TRUE
+✅ Job ID=25 (CPF: 03730461893) → 6 processos → Status TRUE
+✅ Job ID=26 (CPF: 01103192817) → 1 processo  → Status TRUE
+✅ Job ID=27 (CPF: 07620857893) → 1 processo  → Status TRUE
+✅ Job ID=28 (CPF: 06495530803) → 3 processos → Status TRUE
+✅ Job ID=29 (CPF: 27308157830) → 2 processos → Status TRUE
+✅ Job ID=30 (CPF: 07620857893) → 1 processo  → Status TRUE
+✅ Job ID=31 (CPF: 07620857893) → 1 processo  → Status TRUE
+✅ Job ID=32 (CPF: 07620857893) → 1 processo  → Status TRUE
+
+TOTAL: 18 processos executados com sucesso!
+
+🔍 AGORA: Verificar se os PDFs Foram Baixados
+
+root@srv987902:/opt/crawler_tjsp# ls -la /opt/crawler_tjsp/downloads/
+total 32
+drwxr-xr-x 8 root root 4096 Oct  1 05:29 .
+drwxr-xr-x 7 root root 4096 Oct  1 05:22 ..
+drwxr-xr-x 2 root root 4096 Oct  1 05:29 01103192817
+drwxr-xr-x 2 root root 4096 Oct  1 05:28 02174781824
+drwxr-xr-x 2 root root 4096 Oct  1 05:29 03730461893
+drwxr-xr-x 2 root root 4096 Oct  1 05:29 06495530803
+drwxr-xr-x 2 root root 4096 Oct  1 03:29 07620857893
+drwxr-xr-x 2 root root 4096 Oct  1 05:29 27308157830
+root@srv987902:/opt/crawler_tjsp# ls -la /opt/crawler_tjsp/downloads/02174781824/
+total 8
+drwxr-xr-x 2 root root 4096 Oct  1 05:28 .
+drwxr-xr-x 8 root root 4096 Oct  1 05:29 ..
+root@srv987902:/opt/crawler_tjsp# ls -la /opt/crawler_tjsp/downloads/03730461893/
+total 8
+drwxr-xr-x 2 root root 4096 Oct  1 05:29 .
+drwxr-xr-x 8 root root 4096 Oct  1 05:29 ..
+root@srv987902:/opt/crawler_tjsp# find /opt/crawler_tjsp/downloads/ -type f | wc -l
+0
+root@srv987902:/opt/crawler_tjsp# du -sh /opt/crawler_tjsp/downloads/
+28K     /opt/crawler_tjsp/downloads/
+root@srv987902:/opt/crawler_tjsp# for dir in /opt/crawler_tjsp/downloads/*/; do
+    echo "$(basename $dir): $(find $dir -type f 2>/dev/null | wc -l) arquivos"
+done
+01103192817: 0 arquivos
+02174781824: 0 arquivos
+03730461893: 0 arquivos
+06495530803: 0 arquivos
+07620857893: 0 arquivos
+27308157830: 0 arquivos
+root@srv987902:/opt/crawler_tjsp# 
+
+⚠️ PROBLEMA CONFIRMADO: Selenium Não Está Baixando PDFs
+📊 Diagnóstico:
+✅ Worker executou 18 processos
+✅ Diretórios criados para cada CPF
+✅ Comandos executados sem erro
+❌ 0 arquivos baixados
+❌ Todos os diretórios vazios
+
+
+
+

@@ -1,0 +1,155 @@
+root@srv987902:/opt/crawler_tjsp# docker compose ps
+WARN[0000] /opt/crawler_tjsp/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+NAME            IMAGE                COMMAND                  SERVICE   CREATED          STATUS                          PORTS
+tjsp_worker_1   tjsp-worker:latest   "python orchestrator…"   worker    30 minutes ago   Restarting (0) 28 seconds ago   
+root@srv987902:/opt/crawler_tjsp# docker exec -it tjsp_worker_1 bash
+Error response from daemon: Container f46dd5649bdff71c69813d7eb6b8bc01fd0b1e201e0a02b2d2aecb76b20c0db8 is restarting, wait until the container is running
+root@srv987902:/opt/crawler_tjsp# python3 crawler_full.py \
+  --doc 0077044-50.2023.8.26.0500 \
+  --abrir-autos \
+  --baixar-pdf \
+  --turbo-download \
+  --download-dir /app/downloads/07620857893 \
+  --user-data-dir /app/chrome_profile
+/opt/crawler_tjsp/crawler_full.py:1087: SyntaxWarning: invalid escape sequence '\s'
+  js = """
+Traceback (most recent call last):
+  File "/opt/crawler_tjsp/crawler_full.py", line 21, in <module>
+    from selenium import webdriver
+ModuleNotFoundError: No module named 'selenium'
+root@srv987902:/opt/crawler_tjsp# 
+
+------- 
+
+🔍 Análise da Situação:
+O container está em loop de restart constante (reinicia a cada ~28 segundos). Isso confirma que:
+
+✅ Worker conecta ao banco
+✅ Não encontra jobs pendentes
+✅ Encerra com sucesso (exit code 0)
+🔄 Docker reinicia automaticamente
+🔁 Loop infinito
+🎯 Solução: Modificar Temporariamente para Debug
+Vamos parar o restart automático para conseguir entrar no container e testar o crawler:
+
+--- FIX aplicado e novo output --- 
+
+root@srv987902:/opt/crawler_tjsp# docker compose down
+WARN[0000] /opt/crawler_tjsp/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] Running 2/2
+ ✔ Container tjsp_worker_1       Removed                                         0.0s 
+ ✔ Network crawler_tjsp_default  Removed                                         0.1s 
+root@srv987902:/opt/crawler_tjsp# nano docker-compose.yml
+root@srv987902:/opt/crawler_tjsp# docker compose down
+WARN[0000] /opt/crawler_tjsp/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+root@srv987902:/opt/crawler_tjsp# docker compose up -d
+WARN[0000] /opt/crawler_tjsp/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] Running 2/2
+ ✔ Network crawler_tjsp_default  Created                                         0.1s 
+ ✔ Container tjsp_worker_1       Started                                         0.2s 
+root@srv987902:/opt/crawler_tjsp# sleep 3
+root@srv987902:/opt/crawler_tjsp# docker compose ps
+WARN[0000] /opt/crawler_tjsp/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+NAME      IMAGE     COMMAND   SERVICE   CREATED   STATUS    PORTS
+root@srv987902:/opt/crawler_tjsp# docker exec -it tjsp_worker_1 bash
+Error response from daemon: container cd52783f78c5ffac0c9ddbf89b9323bdbca42576464234005d5add9763f1c641 is not running
+root@srv987902:/opt/crawler_tjsp# docker compose logs worker
+WARN[0000] /opt/crawler_tjsp/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+root@srv987902:/opt/crawler_tjsp# docker compose ps -a
+WARN[0000] /opt/crawler_tjsp/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+NAME            IMAGE                COMMAND                  SERVICE   CREATED              STATUS                          PORTS
+tjsp_worker_1   tjsp-worker:latest   "python orchestrator…"   worker    About a minute ago   Exited (0) About a minute ago   
+root@srv987902:/opt/crawler_tjsp# docker compose logs worker | tail -50
+WARN[0000] /opt/crawler_tjsp/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+root@srv987902:/opt/crawler_tjsp# 
+
+----- 
+
+Vamos resetar todos os registros para status = FALSE e então subir o worker novamente.
+
+📋 Query SQL para Resetar Todos os Registros:
+sql
+-- Conectar ao banco
+psql -h 72.60.62.124 -p 5432 -U admin -d n8n
+
+-- Dentro do psql:
+
+-- 1. Ver quantos registros existem
+SELECT COUNT(*) as total FROM consultas_esaj;
+
+-- 2. Ver quantos estão processados
+SELECT COUNT(*) as processados FROM consultas_esaj WHERE status = TRUE;
+
+-- 3. RESETAR TODOS para serem reprocessados
+UPDATE consultas_esaj SET status = FALSE;
+
+-- 4. Verificar o resultado
+SELECT 
+    COUNT(*) as total,
+    COUNT(*) FILTER (WHERE status = TRUE) as processados,
+    COUNT(*) FILTER (WHERE status = FALSE OR status IS NULL) as pendentes
+FROM consultas_esaj;
+
+-- 5. Ver os primeiros 5 que serão processados
+SELECT id, cpf, status FROM consultas_esaj WHERE status = FALSE ORDER BY id LIMIT 5;
+
+-- 6. Sair
+\q
+
+----- EXECUCAO DO RESET ----- 
+
+root@srv987902:/opt/crawler_tjsp# psql -h 72.60.62.124 -p 5432 -U admin -d n8n
+Password for user admin: 
+psql (16.10 (Ubuntu 16.10-0ubuntu0.24.04.1))
+SSL connection (protocol: TLSv1.3, cipher: TLS_AES_256_GCM_SHA384, compression: off)
+Type "help" for help.
+
+n8n=> SELECT COUNT(*) as total FROM consultas_esaj;
+ total 
+-------
+     9
+(1 row)
+
+n8n=> SELECT COUNT(*) as processados FROM consultas_esaj WHERE status = TRUE;
+ processados 
+-------------
+           9
+(1 row)
+
+n8n=> UPDATE consultas_esaj SET status = FALSE;
+UPDATE 9
+n8n=> SELECT 
+    COUNT(*) as total,
+    COUNT(*) FILTER (WHERE status = TRUE) as processados,
+    COUNT(*) FILTER (WHERE status = FALSE OR status IS NULL) as pendentes
+FROM consultas_esaj;
+ total | processados | pendentes 
+-------+-------------+-----------
+     9 |           0 |         9
+(1 row)
+
+n8n=> SELECT id, cpf, status FROM consultas_esaj WHERE status = FALSE ORDER BY id LIMIT 5;
+ id |     cpf     | status 
+----+-------------+--------
+ 24 | 02174781824 | f
+ 25 | 03730461893 | f
+ 26 | 01103192817 | f
+ 27 | 07620857893 | f
+ 28 | 06495530803 | f
+(5 rows)
+
+n8n=> 
+
+
+
+
+
+

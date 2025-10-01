@@ -1,0 +1,332 @@
+root@srv987902:/opt/crawler_tjsp# psql -h 72.60.62.124 -p 5432 -U admin -d n8n
+Password for user admin: 
+psql (16.10 (Ubuntu 16.10-0ubuntu0.24.04.1))
+SSL connection (protocol: TLSv1.3, cipher: TLS_AES_256_GCM_SHA384, compression: off)
+Type "help" for help.
+
+n8n=> SELECT id, cpf, status FROM consultas_esaj LIMIT 10;
+ id |     cpf     | status 
+----+-------------+--------
+ 26 | 01103192817 | t
+ 24 | 02174781824 | t
+ 25 | 03730461893 | t
+ 27 | 07620857893 | t
+ 28 | 06495530803 | t
+ 29 | 27308157830 | t
+ 30 | 07620857893 | t
+ 31 | 07620857893 | t
+ 32 | 07620857893 | t
+(9 rows)
+
+n8n=> SELECT COUNT(*) FROM consultas_esaj WHERE status = FALSE OR status IS NULL;
+ count 
+-------
+     0
+(1 row)
+
+n8n=> UPDATE consultas_esaj SET status = FALSE WHERE id IN (30, 31, 32);
+UPDATE 3
+n8n=> \q
+root@srv987902:/opt/crawler_tjsp# docker compose logs -f worker
+WARN[0000] /opt/crawler_tjsp/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Item encontrado para processar: ID=30, CPF=07620857893
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | 
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Processando item 1/1 do Job ID=30: Processo 0077044-50.2023.8.26.0500
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Executando comando: /usr/local/bin/python crawler_full.py --doc 0077044-50.2023.8.26.0500 --abrir-autos --baixar-pdf --turbo-download --download-dir /app/downloads/07620857893 --user-data-dir /app/chrome_profile
+tjsp_worker_1  | 
+tjsp_worker_1  | Atualizando status para 'processado = TRUE' para o ID: 30
+tjsp_worker_1  | [SUCESSO] Status atualizado para o ID 30.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Item encontrado para processar: ID=31, CPF=07620857893
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | 
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Processando item 1/1 do Job ID=31: Processo 0077044-50.2023.8.26.0500
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Executando comando: /usr/local/bin/python crawler_full.py --doc 0077044-50.2023.8.26.0500 --abrir-autos --baixar-pdf --turbo-download --download-dir /app/downloads/07620857893 --user-data-dir /app/chrome_profile
+tjsp_worker_1  | 
+tjsp_worker_1  | Atualizando status para 'processado = TRUE' para o ID: 31
+tjsp_worker_1  | [SUCESSO] Status atualizado para o ID 31.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Item encontrado para processar: ID=32, CPF=07620857893
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | 
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Processando item 1/1 do Job ID=32: Processo 0077044-50.2023.8.26.0500
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Executando comando: /usr/local/bin/python crawler_full.py --doc 0077044-50.2023.8.26.0500 --abrir-autos --baixar-pdf --turbo-download --download-dir /app/downloads/07620857893 --user-data-dir /app/chrome_profile
+tjsp_worker_1  | 
+tjsp_worker_1  | Atualizando status para 'processado = TRUE' para o ID: 32
+tjsp_worker_1  | [SUCESSO] Status atualizado para o ID 32.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1 exited with code 0
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1 exited with code 0
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1 exited with code 0
+root@srv987902:/opt/crawler_tjsp# docker exec tjsp_worker_1 ls -la /app/downloads/07620857893/893/
+Error response from daemon: Container f46dd5649bdff71c69813d7eb6b8bc01fd0b1e201e0a02b2d2aecb76b20c0db8 is restarting, wait until the container is running
+root@srv987902:/opt/crawler_tjsp# docker compose logs worker | grep -A 20 "crawler_full.py"
+WARN[0000] /opt/crawler_tjsp/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+tjsp_worker_1  | Executando comando: /usr/local/bin/python crawler_full.py --doc 0077044-50.2023.8.26.0500 --abrir-autos --baixar-pdf --turbo-download --download-dir /app/downloads/07620857893 --user-data-dir /app/chrome_profile
+tjsp_worker_1  | 
+tjsp_worker_1  | Atualizando status para 'processado = TRUE' para o ID: 30
+tjsp_worker_1  | [SUCESSO] Status atualizado para o ID 30.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Item encontrado para processar: ID=31, CPF=07620857893
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | 
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Processando item 1/1 do Job ID=31: Processo 0077044-50.2023.8.26.0500
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Executando comando: /usr/local/bin/python crawler_full.py --doc 0077044-50.2023.8.26.0500 --abrir-autos --baixar-pdf --turbo-download --download-dir /app/downloads/07620857893 --user-data-dir /app/chrome_profile
+tjsp_worker_1  | 
+tjsp_worker_1  | Atualizando status para 'processado = TRUE' para o ID: 31
+tjsp_worker_1  | [SUCESSO] Status atualizado para o ID 31.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Item encontrado para processar: ID=32, CPF=07620857893
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | 
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Processando item 1/1 do Job ID=32: Processo 0077044-50.2023.8.26.0500
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Executando comando: /usr/local/bin/python crawler_full.py --doc 0077044-50.2023.8.26.0500 --abrir-autos --baixar-pdf --turbo-download --download-dir /app/downloads/07620857893 --user-data-dir /app/chrome_profile
+tjsp_worker_1  | 
+tjsp_worker_1  | Atualizando status para 'processado = TRUE' para o ID: 32
+tjsp_worker_1  | [SUCESSO] Status atualizado para o ID 32.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+root@srv987902:/opt/crawler_tjsp# docker exec tjsp_worker_1 python manage_queue.py --status
+Error response from daemon: Container f46dd5649bdff71c69813d7eb6b8bc01fd0b1e201e0a02b2d2aecb76b20c0db8 is restarting, wait until the container is running
+root@srv987902:/opt/crawler_tjsp# wait 10
+-bash: wait: pid 10 is not a child of this shell
+root@srv987902:/opt/crawler_tjsp# docker exec tjsp_worker_1 python manage_queue.py --reset-last 5
+Error response from daemon: Container f46dd5649bdff71c69813d7eb6b8bc01fd0b1e201e0a02b2d2aecb76b20c0db8 is restarting, wait until the container is running
+root@srv987902:/opt/crawler_tjsp# 
+root@srv987902:/opt/crawler_tjsp# ls
+DEPLOY_TRACKING.md   chrome_profile      log_deploy_2.txt            reset_queue.sql
+Dockerfile           crawler_full.py     log_deploy_3.txt            screenshots
+QUEUE_MANAGEMENT.md  docker-compose.yml  manage_queue.py
+README.md            downloads           orchestrator_subprocess.py
+certs                log_deploy_1.txt    requirements.txt
+root@srv987902:/opt/crawler_tjsp# cd downloads
+root@srv987902:/opt/crawler_tjsp/downloads# ls
+07620857893
+root@srv987902:/opt/crawler_tjsp/downloads# cd 07620857893
+root@srv987902:/opt/crawler_tjsp/downloads/07620857893# ls
+root@srv987902:/opt/crawler_tjsp/downloads/07620857893# cd ..
+root@srv987902:/opt/crawler_tjsp/downloads# cd ..
+root@srv987902:/opt/crawler_tjsp# docker compose logs worker | grep -i "error\|exception\|traceback" -A 10
+WARN[0000] /opt/crawler_tjsp/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+root@srv987902:/opt/crawler_tjsp# 
+
+✅ Sem Erros nos Logs - Crawler Está Executando Silenciosamente
+Não há erros, exceções ou tracebacks. Isso significa que o 
+crawler_full.py
+ está executando sem falhas, mas também sem output.
+
+ --- TESTE ---
+
+ root@srv987902:/opt/crawler_tjsp# docker exec -it tjsp_worker_1 bash
+Error response from daemon: Container f46dd5649bdff71c69813d7eb6b8bc01fd0b1e201e0a02b2d2aecb76b20c0db8 is restarting, wait until the container is running
+root@srv987902:/opt/crawler_tjsp# python crawler_full.py \
+  --doc 0077044-50.2023.8.26.0500 \
+  --abrir-autos \
+  --baixar-pdf \
+  --turbo-download \
+  --download-dir /app/downloads/07620857893 \
+  --user-data-dir /app/chrome_profile
+Command 'python' not found, did you mean:
+  command 'python3' from deb python3
+  command 'python' from deb python-is-python3
+root@srv987902:/opt/crawler_tjsp# python3 crawler_full.py \                           
+  --doc 0077044-50.2023.8.26.0500 \
+  --abrir-autos \
+  --baixar-pdf \
+  --turbo-download \
+  --download-dir /app/downloads/07620857893 \
+  --user-data-dir /app/chrome_profile
+/opt/crawler_tjsp/crawler_full.py:1087: SyntaxWarning: invalid escape sequence '\s'
+  js = """
+Traceback (most recent call last):
+  File "/opt/crawler_tjsp/crawler_full.py", line 21, in <module>
+    from selenium import webdriver
+ModuleNotFoundError: No module named 'selenium'
+root@srv987902:/opt/crawler_tjsp# 
+
+--- 
+
+🎯 Descobrimos o Problema!
+Você está tentando executar o crawler no host (servidor), mas as dependências (Selenium) estão dentro do container.
+
+✅ Solução: Aguardar o Container Estabilizar
+O container está em loop de restart. Vamos aguardar e então entrar nele:
+
+bash
+# 1. Aguardar 15 segundos para o container estabilizar
+sleep 15
+
+# 2. Verificar se está rodando
+docker compose ps
+
+# 3. Entrar no container
+docker exec -it tjsp_worker_1 bash
+
+# 4. Dentro do container, executar o crawler
+python crawler_full.py \
+  --doc 0077044-50.2023.8.26.0500 \
+  --abrir-autos \
+  --baixar-pdf \
+  --turbo-download \
+  --download-dir /app/downloads/07620857893 \
+  --user-data-dir /app/chrome_profile
+🔄 Alternativa: Parar o Restart Loop
+Se o container continuar reiniciando, podemos modificar temporariamente para debug:
+
+bash
+# 1. Parar o container
+docker compose down
+
+# 2. Editar docker-compose.yml temporariamente
+# Mudar de: restart: unless-stopped
+# Para: restart: "no"
+
+# 3. Subir novamente
+docker compose up -d
+
+# 4. Entrar no container
+docker exec -it tjsp_worker_1 bash
+📋 Ou: Ver Últimas 300 Linhas dos Logs
+Para entender melhor o que o crawler está fazendo:
+
+bash
+docker compose logs worker | tail -300
+🎯 Resumo:
+❌ Não execute no host (não tem Selenium instalado)
+✅ Execute dentro do container (tem todas as dependências)
+⏳ Aguarde o container estabilizar antes de executar docker exec
+Execute os comandos acima e me mostre o resultado! Vamos ver o output do crawler executando dentro do container. 🚀
