@@ -293,6 +293,120 @@ command = [...]  # SEM --user-data-dir
 
 ---
 
+### **8. Tentativa: Diretório Temporário Único no Crawler**
+**Data:** 2025-10-01 03:01  
+**Problema:**
+Erro persiste mesmo com orchestrator não passando `--user-data-dir`.
+
+**Solução Tentada:**
+Modificar `crawler_full.py` para criar diretório temporário único:
+```python
+# crawler_full.py
+if user_data_dir:
+    opts.add_argument(f"--user-data-dir={user_data_dir}")
+else:
+    import tempfile, time
+    temp_dir = tempfile.mkdtemp(prefix=f"chrome_{int(time.time())}_")
+    opts.add_argument(f"--user-data-dir={temp_dir}")
+```
+
+**Commit:** `33a7c78` → Força criação de temp dir único
+
+**Status:** ❌ **NÃO RESOLVEU** - Erro persiste
+
+---
+
+### **9. Tentativa: Adicionar Limpeza de Processos Chrome**
+**Data:** 2025-10-01 03:05  
+**Problema:**
+Hipótese de processos Chrome zombie bloqueando novos lançamentos.
+
+**Solução Tentada:**
+```python
+# orchestrator_subprocess.py - antes de cada execução
+subprocess.run(["pkill", "-9", "chrome"], capture_output=True, timeout=5)
+subprocess.run(["pkill", "-9", "chromium"], capture_output=True, timeout=5)
+subprocess.run(["pkill", "-9", "chromedriver"], capture_output=True, timeout=5)
+```
+
+**Commit:** `4632426` → Adiciona limpeza de processos
+
+**Status:** ❌ **NÃO RESOLVEU** - Erro persiste
+
+---
+
+### **10. Tentativa: Remover Completamente user-data-dir**
+**Data:** 2025-10-01 03:08  
+**Problema:**
+Mesmo com temp dir único, erro persiste.
+
+**Solução Tentada:**
+Comentar completamente o código que adiciona `--user-data-dir`:
+```python
+# crawler_full.py
+# CORRIGIDO: NÃO usar --user-data-dir
+# Comentado: Causa problemas no Docker
+# if user_data_dir:
+#     opts.add_argument(f"--user-data-dir={user_data_dir}")
+```
+
+**Commit:** `da54591` → Remove user-data-dir completamente
+
+**Status:** ❌ **NÃO RESOLVEU** - Erro persiste
+
+---
+
+### **11. Tentativa: Flags Agressivas para Desabilitar Cache**
+**Data:** 2025-10-01 03:11  
+**Problema:**
+Chrome ainda tenta usar perfil mesmo sem `--user-data-dir`.
+
+**Solução Tentada:**
+Adicionar 12 flags para desabilitar recursos que usam perfil:
+```python
+opts.add_argument("--disable-extensions")
+opts.add_argument("--disable-plugins")
+opts.add_argument("--disable-background-networking")
+opts.add_argument("--disable-sync")
+opts.add_argument("--disable-translate")
+# ... mais 7 flags
+```
+
+**Commit:** `565037b` → Adiciona flags agressivas
+
+**Status:** ❌ **NÃO RESOLVEU** - Erro persiste
+
+---
+
+### **12. Tentativa: Substituir Chromium por Google Chrome**
+**Data:** 2025-10-01 03:16  
+**Problema:**
+Chromium do Debian tem bug conhecido com Docker.
+
+**Solução Tentada:**
+Modificar Dockerfile para instalar Google Chrome oficial:
+```dockerfile
+# ANTES
+RUN apt-get install -y chromium
+
+# DEPOIS
+RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | gpg --dearmor ...
+  && apt-get install -y google-chrome-stable
+```
+
+**Commit:** `33a4cbe` → Substitui Chromium por Google Chrome
+
+**Status:** ❌ **NÃO RESOLVEU** - Erro persiste mesmo com Google Chrome oficial
+
+**Observação Crítica:** 
+- Google Chrome foi instalado com sucesso (141.0.7390.54-1)
+- Erro continua IDÊNTICO mesmo com Chrome oficial
+- Problema é mais profundo do que apenas o binário do navegador
+- Erro acontece em 0.7 segundos (antes de qualquer navegação)
+- Indica problema fundamental com Selenium/ChromeDriver no ambiente Docker
+
+---
+
 ## 📦 Arquivos Modificados
 
 ### **requirements.txt**
