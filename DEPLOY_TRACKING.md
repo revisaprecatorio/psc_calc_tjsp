@@ -101,6 +101,62 @@ O worker conectava ao banco mas não encontrava registros para processar.
 
 ---
 
+### **4. Adição: Ferramentas de Gerenciamento da Fila**
+**Data:** 2025-10-01 00:44  
+**Objetivo:**
+Criar ferramentas para facilitar o gerenciamento e teste da fila de processamento.
+
+**Problema Identificado:**
+- Sem ferramentas, era difícil testar o worker
+- Não havia forma fácil de resetar jobs para reprocessamento
+- Faltava visibilidade sobre o estado da fila
+
+**Solução Implementada:**
+
+**4.1. manage_queue.py**
+Script Python interativo com funcionalidades:
+- `--status`: Mostra estatísticas da fila (total, processados, pendentes)
+- `--list`: Lista próximos jobs pendentes
+- `--list-processed`: Lista últimos jobs processados
+- `--reset-all`: Reseta todos os registros (com confirmação)
+- `--reset-last N`: Reseta os últimos N registros processados
+- `--reset-id ID1 ID2`: Reseta IDs específicos
+- `--reset-cpf CPF`: Reseta todos os registros de um CPF
+
+**4.2. reset_queue.sql**
+Queries SQL prontas para uso direto no PostgreSQL com opções de reset.
+
+**4.3. QUEUE_MANAGEMENT.md**
+Documentação completa com:
+- Exemplos de uso de todos os comandos
+- Workflow de processamento visual
+- Cenários de teste
+- Guia de troubleshooting
+
+**Dependência Adicionada:**
+```diff
+# requirements.txt
++ tabulate  # Para formatação de tabelas no manage_queue.py
+```
+
+**Commits:** 
+- `136de15` → Documentação de tracking inicial
+- `16601a4` → Ferramentas de gerenciamento da fila
+
+**Status:** ✅ Implementado
+
+**Uso:**
+```bash
+# Dentro do container
+docker exec -it tjsp_worker_1 bash
+python manage_queue.py --status
+
+# Do host (sem entrar no container)
+docker exec tjsp_worker_1 python manage_queue.py --status
+```
+
+---
+
 ## 📦 Arquivos Modificados
 
 ### **requirements.txt**
@@ -115,6 +171,7 @@ selenium==4.25.0
 requests
 psycopg2-binary  # ← ALTERADO de psycopg2
 python-dotenv
+tabulate  # ← ADICIONADO para manage_queue.py
 ```
 
 ### **.env**
@@ -160,19 +217,19 @@ query = "UPDATE consultas_esaj SET status = TRUE WHERE id = %s;"  # ← ALTERADO
 cd /opt/crawler_tjsp
 
 # 2. Parar containers
-docker-compose down
+docker compose down
 
 # 3. Atualizar código
 git pull origin main
 
 # 4. Rebuild da imagem (com --no-cache quando necessário)
-docker-compose build --no-cache
+docker compose build --no-cache
 
 # 5. Subir containers
-docker-compose up -d
+docker compose up -d
 
 # 6. Monitorar logs
-docker-compose logs -f worker
+docker compose logs -f worker
 ```
 
 ### **Estrutura Docker:**
@@ -255,7 +312,7 @@ docker-compose logs -f worker
 
 4. **Monitorar Processamento:**
    ```bash
-   docker-compose logs -f worker
+   docker compose logs -f worker
    ```
 
 5. **Validar Selenium/Chromium:**
@@ -301,7 +358,7 @@ docker-compose logs -f worker
 3. Validar permissões de escrita em `/app/downloads`
 
 ### **Container reinicia constantemente:**
-1. Verificar logs: `docker-compose logs worker`
+1. Verificar logs: `docker compose logs worker`
 2. Validar credenciais do banco
 3. Conferir variáveis de ambiente
 
@@ -313,8 +370,9 @@ docker-compose logs -f worker
 - **Servidor:** srv987902 (72.60.62.124)
 - **Banco de Dados:** PostgreSQL (n8n database)
 - **Documentação Selenium:** https://selenium-python.readthedocs.io/
+- **Gerenciamento de Fila:** Ver `QUEUE_MANAGEMENT.md`
 
 ---
 
-**Última Atualização:** 2025-10-01 00:41  
+**Última Atualização:** 2025-10-01 00:50  
 **Status Geral:** 🟡 Em validação (aguardando teste com jobs reais)

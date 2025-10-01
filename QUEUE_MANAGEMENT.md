@@ -209,7 +209,7 @@ python manage_queue.py --reset-last 5
 python manage_queue.py --list
 
 # Monitorar o worker processar
-docker-compose logs -f worker
+docker compose logs -f worker
 ```
 
 ---
@@ -225,7 +225,7 @@ python manage_queue.py --status
 python manage_queue.py --reset-last 5
 
 # 3. Verificar logs do worker
-docker-compose logs -f worker
+docker compose logs -f worker
 ```
 
 ### **Problema: Jobs ficam travados (não processam)**
@@ -234,10 +234,10 @@ docker-compose logs -f worker
 python manage_queue.py --list
 
 # 2. Verificar se o worker está rodando
-docker-compose ps
+docker compose ps
 
 # 3. Reiniciar o worker
-docker-compose restart worker
+docker compose restart worker
 ```
 
 ### **Problema: Erro de conexão com banco**
@@ -260,7 +260,7 @@ psql -h 72.60.62.124 -p 5432 -U admin -d n8n
 
 2. **Para testes:**
    - Use `--reset-id` para jobs específicos
-   - Monitore os logs após resetar: `docker-compose logs -f worker`
+   - Monitore os logs após resetar: `docker compose logs -f worker`
 
 3. **Manutenção:**
    - Execute `--status` periodicamente para monitorar a fila
