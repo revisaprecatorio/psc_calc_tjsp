@@ -137,15 +137,12 @@ def main():
 
             caminho_download = os.path.abspath(f"downloads/{cpf_associado}")
             
-            # CORRIGIDO: Criar user-data-dir único para cada execução
-            # Isso evita o erro "user data directory is already in use"
-            import time
-            unique_profile = f"{chrome_profile_path}_{job_id}_{i}_{int(time.time())}"
-            
+            # CORRIGIDO: NÃO usar --user-data-dir para evitar conflitos
+            # O Chrome criará um perfil temporário automaticamente
             command = [
                 sys.executable, "crawler_full.py", "--doc", processo_cnj,
                 "--abrir-autos", "--baixar-pdf", "--turbo-download",
-                "--download-dir", caminho_download, "--user-data-dir", unique_profile,
+                "--download-dir", caminho_download,
             ]
 
             try:
