@@ -137,6 +137,15 @@ def main():
 
             caminho_download = os.path.abspath(f"downloads/{cpf_associado}")
             
+            # CORRIGIDO: Matar processos antigos do Chrome antes de executar
+            # Resolve erro: "user data directory is already in use"
+            try:
+                subprocess.run(["pkill", "-9", "chrome"], capture_output=True, timeout=5)
+                subprocess.run(["pkill", "-9", "chromium"], capture_output=True, timeout=5)
+                subprocess.run(["pkill", "-9", "chromedriver"], capture_output=True, timeout=5)
+            except Exception:
+                pass  # Ignora se não houver processos para matar
+            
             # CORRIGIDO: NÃO usar --user-data-dir para evitar conflitos
             # O Chrome criará um perfil temporário automaticamente
             command = [
