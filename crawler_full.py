@@ -123,51 +123,33 @@ def _http_download_with_cookies(url, driver, outdir, filename=None, referer=None
 def _build_chrome(attach, user_data_dir, cert_issuer_cn, cert_subject_cn,
                   debugger_address=None, headless=False, download_dir="downloads"):
     """
-    Cria o Chrome com:
-      - perfil (user_data_dir) se fornecido
-      - prefs para FORÇAR DOWNLOAD de PDF (não abrir no viewer)
-      - headless opcional
-      - debuggerAddress (se fornecido)
+    Cria Chrome via Selenium Grid (Remote WebDriver) ou local (fallback).
+    
+    Se SELENIUM_REMOTE_URL estiver definido no ambiente, conecta ao Grid.
+    Caso contrário, usa Chrome local (para desenvolvimento).
+    
+    Selenium Grid resolve o problema "user data directory is already in use"
+    porque o Chrome roda em container separado e otimizado.
     """
+    import os as _os
+    
+    # Verifica se deve usar Selenium Grid
+    selenium_remote_url = _os.environ.get("SELENIUM_REMOTE_URL")
+    
     def make_options():
         opts = Options()
-        # CORRIGIDO: NÃO usar --user-data-dir para evitar conflitos
-        # Chrome criará perfil temporário automaticamente em /tmp
-        # Isso resolve definitivamente o erro "user data directory is already in use"
         
-        # Comentado: Causa problemas no Docker
-        # if user_data_dir:
-        #     opts.add_argument(f"--user-data-dir={user_data_dir}")
-        #     opts.add_argument("--profile-directory=Default")
-
-        # Headless + flags úteis para VPS
+        # Headless (sempre True no Grid)
         if headless:
             try: opts.add_argument("--headless=new")
             except Exception: opts.add_argument("--headless")
         
-        # CORRIGIDO: Flags específicas para resolver problema de user-data-dir no Docker
+        # Flags essenciais
         opts.add_argument("--disable-gpu")
         opts.add_argument("--disable-dev-shm-usage")
         opts.add_argument("--no-sandbox")
-        opts.add_argument("--no-first-run")
-        opts.add_argument("--no-default-browser-check")
         opts.add_argument("--window-size=1920,1080")
         opts.add_argument("--disable-blink-features=AutomationControlled")
-        
-        # NOVO: Flags adicionais para forçar Chrome a não usar cache/perfil persistente
-        opts.add_argument("--disable-extensions")
-        opts.add_argument("--disable-plugins")
-        opts.add_argument("--disable-background-networking")
-        opts.add_argument("--disable-sync")
-        opts.add_argument("--disable-translate")
-        opts.add_argument("--metrics-recording-only")
-        opts.add_argument("--disable-default-apps")
-        opts.add_argument("--mute-audio")
-        opts.add_argument("--no-first-run")
-        opts.add_argument("--safebrowsing-disable-auto-update")
-        opts.add_argument("--disable-client-side-phishing-detection")
-        opts.add_argument("--disable-component-update")
-        opts.add_argument("--disable-domain-reliability")
 
         # Preferências de download (FORÇA baixar PDF)
         Path(download_dir).mkdir(parents=True, exist_ok=True)
@@ -191,24 +173,49 @@ def _build_chrome(attach, user_data_dir, cert_issuer_cn, cert_subject_cn,
 
         return opts
 
-    import os as _os
+    opts = make_options()
+    
+    # NOVO: Usa Remote WebDriver se SELENIUM_REMOTE_URL estiver definido
+    if selenium_remote_url:
+        print(f"[INFO] Conectando ao Selenium Grid: {selenium_remote_url}")
+        try:
+            from selenium.webdriver import Remote
+            driver = Remote(
+                command_executor=selenium_remote_url,
+                options=opts
+            )
+            driver.set_page_load_timeout(60)
+            print("[INFO] ✅ Conectado ao Selenium Grid com sucesso!")
+            return driver
+        except Exception as e:
+            print(f"[ERROR] ❌ Falha ao conectar no Selenium Grid: {e}")
+            print("[INFO] Tentando Chrome local como fallback...")
+    
+    # Fallback: Chrome local (para desenvolvimento)
+    # Tenta anexar via debuggerAddress primeiro
     if not debugger_address:
         debugger_address = _os.environ.get("DEBUGGER_ADDRESS")
-
-    # Tenta anexar via debuggerAddress
+    
     if debugger_address:
         try:
-            opts = make_options()
-            opts.add_experimental_option("debuggerAddress", debugger_address)
-            d = webdriver.Chrome(options=opts); d.set_page_load_timeout(60); return d
+            opts_debug = make_options()
+            opts_debug.add_experimental_option("debuggerAddress", debugger_address)
+            print(f"[INFO] Tentando anexar ao Chrome em {debugger_address}...")
+            d = webdriver.Chrome(options=opts_debug)
+            d.set_page_load_timeout(60)
+            print("[INFO] ✅ Anexado ao Chrome existente!")
+            return d
         except WebDriverException as e:
-            print(f"[WARN] Falha ao anexar em {debugger_address}: {e}. Abrindo Chrome novo…")
-
-    # Chrome “novo”
-    opts = make_options()
+            print(f"[WARN] Falha ao anexar em {debugger_address}: {e}")
+            print("[INFO] Abrindo Chrome novo...")
+    
+    # Chrome local novo
+    print("[INFO] Usando Chrome local")
     if attach:
         opts.add_argument("--remote-allow-origins=*")
-    d = webdriver.Chrome(options=opts); d.set_page_load_timeout(60); return d
+    d = webdriver.Chrome(options=opts)
+    d.set_page_load_timeout(60)
+    return d
 
 # ------------------------------------------------------------
 # CAS / Login

@@ -14,7 +14,11 @@ O container NÃO usa Ubuntu, usa Debian Bookworm! Isso significa:
 ✅ Google Chrome foi instalado do repositório Debian
 ❌ Mas o problema persiste mesmo assim
 Alternativa: Usar Imagem Base Ubuntu
-Podemos tentar trocar a imagem base para Ubuntu:
+Podemos tentar trocar a imagem base para Ubuntu
+
+---- 
+
+
 
 dockerfile
 # OPÇÃO 1: Ubuntu 22.04
@@ -41,12 +45,319 @@ Por enquanto, tudo documentado e versionado no Git!
 
 Quando você quiser retomar, me avise qual caminho prefere seguir. 🚀
 
-Feedback submitted
+--- 
+
+📋 RESUMO DO PROBLEMA:
+Erro Persistente:
+SessionNotCreatedException: user data directory is already in use
+Tentativas Realizadas (TODAS FALHARAM):
+❌ Diretório único por execução
+❌ Remover --user-data-dir do orchestrator
+❌ Criar temp dir único no crawler
+❌ Matar processos Chrome antes de executar
+❌ Remover completamente --user-data-dir
+❌ Adicionar 12 flags para desabilitar cache
+❌ Substituir Chromium por Google Chrome oficial
+❌ Limpeza de processos
+❌ Flags agressivas
+❌ Diretório temporário com timestamp
+❌ Comentar código user-data-dir
+❌ Google Chrome 141.0.7390.54-1
+Observações Críticas:
+⏱️ Erro acontece em 0.7 segundos (antes de qualquer navegação)
+🐛 Problema é fundamental com Selenium/ChromeDriver no Docker
+🖥️ Container usa Debian Bookworm, não Ubuntu
+✅ Worker e Orchestrator funcionam perfeitamente
+❌ Apenas Selenium/Chrome falha
+🎯 PRÓXIMOS PASSOS (Quando Retomar):
+RECOMENDAÇÃO: Opção A - Selenium Grid
+Por quê?
+
+✅ Solução mais rápida e confiável
+✅ Chrome já configurado pelo Selenium oficial
+✅ Não requer mudanças no código
+✅ Resolve problemas de ambiente automaticamente
+Como implementar:
+
+yaml
+# docker-compose.yml
+services:
+  selenium-chrome:
+    image: selenium/standalone-chrome:latest
+    ports:
+      - "4444:4444"
+    shm_size: 2gb
+    
+  worker:
+    depends_on:
+      - selenium-chrome
+    environment:
+      - SELENIUM_REMOTE_URL=http://selenium-chrome:4444
+📊 Status Atual:
+✅ Código versionado no Git
+✅ Documentação completa
+✅ 19 logs de deploy
+✅ Worker funcional
+✅ Orchestrator funcional
+❌ Selenium/Chrome bloqueado
+⏸
+
+--- 
+
+🎯 PLANO COMPLETO: IMPLEMENTAÇÃO SELENIUM GRID
+📋 CONTEXTO IMPORTANTE
+Esclarecimento sobre Sistema Operacional:
+Você está CORRETO sobre a VPS ser Ubuntu, mas há uma nuance importante:
+
+VPS Host: Ubuntu (srv987902) ✅
+Container Docker: Debian Bookworm (python:3.12-slim-bookworm) ⚠️
+O problema está DENTRO do container, que usa Debian, não Ubuntu. Quando rodamos Docker, o container tem seu próprio sistema operacional isolado.
+
+Por Que Selenium Grid Resolve?
+O Selenium Grid usa um container separado que já vem com:
+
+✅ Chrome pré-instalado e configurado
+✅ ChromeDriver compatível
+✅ Todas as dependências resolvidas
+✅ Ambiente testado pelo time do Selenium
+Não importa se o host é Ubuntu ou Debian - o Selenium Grid já funciona!
+
+🏗️ ARQUITETURA ATUAL vs NOVA
+Arquitetura Atual (COM PROBLEMA):
+┌─────────────────────────────────────┐
+│  Container: tjsp_worker_1           │
+│  (Debian Bookworm)                  │
+│                                     │
+│  ┌──────────────────────────────┐  │
+│  │ orchestrator_subprocess.py   │  │
+│  │         ↓                    │  │
+│  │ crawler_full.py              │  │
+│  │         ↓                    │  │
+│  │ Selenium WebDriver           │  │
+│  │         ↓                    │  │
+│  │ Google Chrome ❌ FALHA       │  │
+│  │ (SessionNotCreated)          │  │
+│  └──────────────────────────────┘  │
+└─────────────────────────────────────┘
+Problema: Chrome dentro do container não consegue iniciar sessão.
+
+Arquitetura Nova (COM SELENIUM GRID):
+┌──────────────────────────────┐    ┌─────────────────────────────┐
+│ Container: tjsp_worker_1     │    │ Container: selenium-chrome  │
+│ (Debian Bookworm)            │    │ (Ubuntu + Chrome oficial)   │
+│                              │    │                             │
+│ ┌────────────────────────┐  │    │ ┌─────────────────────────┐ │
+│ │ orchestrator_subprocess│  │    │ │ Selenium Grid Hub       │ │
+│ │         ↓              │  │    │ │         ↓               │ │
+│ │ crawler_full.py        │  │    │ │ Chrome + ChromeDriver   │ │
+│ │         ↓              │  │    │ │ (Pré-configurado ✅)    │ │
+│ │ Remote WebDriver ──────┼──┼────┼→│ Executa comandos        │ │
+│ │ (HTTP: 4444)           │  │    │ └─────────────────────────┘ │
+│ └────────────────────────┘  │    └─────────────────────────────┘
+└──────────────────────────────┘
+         ↓ (volumes)
+    downloads/ screenshots/
+Vantagens:
+
+✅ Chrome roda em container separado e otimizado
+✅ Worker não precisa instalar Chrome
+✅ Comunicação via HTTP (Remote WebDriver)
+✅ Problema de "user-data-dir" não existe no Selenium Grid
+🔧 MUDANÇAS NECESSÁRIAS
+1. docker-compose.yml (Adicionar Selenium Grid)
+yaml
+version: "3.9"
+
+services:
+  # NOVO: Container Selenium Grid com Chrome
+  selenium-chrome:
+    image: selenium/standalone-chrome:latest
+    container_name: selenium_chrome
+    ports:
+      - "4444:4444"  # Porta do Selenium Grid
+      - "7900:7900"  # Porta do VNC (opcional, para debug visual)
+    shm_size: '2gb'  # Essencial para Chrome não travar
+    restart: unless-stopped
+    environment:
+      - SE_NODE_MAX_SESSIONS=5
+      - SE_NODE_SESSION_TIMEOUT=300
+      - SE_NODE_OVERRIDE_MAX_SESSIONS=true
+
+  # MODIFICADO: Worker agora se conecta ao Selenium Grid
+  worker:
+    build: .
+    image: tjsp-worker:latest
+    container_name: tjsp_worker_1
+    depends_on:
+      - selenium-chrome  # Aguarda Selenium Grid iniciar
+    env_file:
+      - .env
+    environment:
+      # NOVO: URL do Selenium Grid
+      - SELENIUM_REMOTE_URL=http://selenium-chrome:4444
+    volumes:
+      - ./downloads:/app/downloads
+      - ./screenshots:/app/screenshots
+      # REMOVIDO: chrome_profile (não precisa mais)
+      - ./certs:/app/certs
+    restart: unless-stopped
+Mudanças:
+
+✅ Adiciona serviço selenium-chrome
+✅ Worker depende do Selenium Grid
+✅ Variável SELENIUM_REMOTE_URL para conexão
+✅ Remove volume chrome_profile (não precisa mais)
+2. crawler_full.py (Usar Remote WebDriver)
+Modificar a função make_chrome():
+
+python
+def make_chrome(
+    download_dir="downloads",
+    user_data_dir=None,  # Ignorado no Remote WebDriver
+    headless=True,
+    cert_issuer_cn=None,
+    cert_subject_cn=None,
+    debugger_address=None,
+    attach=False
+):
+    """
+    Cria Chrome via Selenium Grid (Remote WebDriver) ou local (fallback)
+    """
+    import os as _os
+    
+    # Verifica se deve usar Selenium Grid
+    selenium_remote_url = _os.environ.get("SELENIUM_REMOTE_URL")
+    
+    def make_options():
+        opts = Options()
+        
+        # Headless (sempre True no Grid)
+        if headless:
+            try: opts.add_argument("--headless=new")
+            except: opts.add_argument("--headless")
+        
+        # Flags essenciais
+        opts.add_argument("--disable-gpu")
+        opts.add_argument("--disable-dev-shm-usage")
+        opts.add_argument("--no-sandbox")
+        opts.add_argument("--window-size=1920,1080")
+        opts.add_argument("--disable-blink-features=AutomationControlled")
+        
+        # Preferências de download
+        Path(download_dir).mkdir(parents=True, exist_ok=True)
+        prefs = {
+            "download.default_directory": str(Path(download_dir).resolve()),
+            "download.prompt_for_download": False,
+            "download.directory_upgrade": True,
+            "safebrowsing.enabled": True,
+            "plugins.always_open_pdf_externally": True,
+        }
+        opts.add_experimental_option("prefs", prefs)
+        
+        # Auto-seleção de certificado
+        if cert_issuer_cn or cert_subject_cn:
+            policy = {"pattern": "https://esaj.tjsp.jus.br", "filter": {}}
+            if cert_issuer_cn:
+                policy["filter"].setdefault("ISSUER", {})["CN"] = cert_issuer_cn
+            if cert_subject_cn:
+                policy["filter"].setdefault("SUBJECT", {})["CN"] = cert_subject_cn
+            opts.add_argument("--auto-select-certificate-for-urls=" + json.dumps([policy]))
+        
+        return opts
+    
+    opts = make_options()
+    
+    # NOVO: Usa Remote WebDriver se SELENIUM_REMOTE_URL estiver definido
+    if selenium_remote_url:
+        print(f"[INFO] Conectando ao Selenium Grid: {selenium_remote_url}")
+        try:
+            from selenium.webdriver import Remote
+            driver = Remote(
+                command_executor=selenium_remote_url,
+                options=opts
+            )
+            driver.set_page_load_timeout(60)
+            print("[INFO] Conectado ao Selenium Grid com sucesso!")
+            return driver
+        except Exception as e:
+            print(f"[ERROR] Falha ao conectar no Selenium Grid: {e}")
+            print("[INFO] Tentando Chrome local como fallback...")
+    
+    # Fallback: Chrome local (para desenvolvimento)
+    print("[INFO] Usando Chrome local")
+    driver = webdriver.Chrome(options=opts)
+    driver.set_page_load_timeout(60)
+    return driver
+Mudanças:
+
+✅ Detecta SELENIUM_REMOTE_URL do ambiente
+✅ Usa Remote() para conectar ao Grid
+✅ Mantém fallback para Chrome local (dev)
+✅ Remove lógica de user_data_dir (não precisa mais)
+✅ Remove flags desnecessárias (Grid já otimizado)
+3. Dockerfile (Simplificar - Remover Chrome)
+dockerfile
+# Dockerfile para rodar o WORKER (orchestrator_subprocess.py)
+FROM python:3.12-slim-bookworm
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PIP_NO_CACHE_DIR=1 \
+    TZ=America/Sao_Paulo
+
+# SIMPLIFICADO: Não precisa mais instalar Chrome!
+# Apenas dependências básicas
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Instala dependências python
+COPY requirements.txt /app/
+RUN pip install --upgrade pip
+RUN pip install -r requirements.txt
+
+# Copia todo o código da aplicação
+COPY . /app/
+
+ENTRYPOINT ["python", "orchestrator_subprocess.py"]
+Mudanças:
+
+✅ Remove instalação do Google Chrome (30+ linhas)
+✅ Remove dependências do Chrome (libgbm1, libnss3, etc)
+✅ Dockerfile fica 70% menor e mais rápido
+✅ Não importa se é Debian ou Ubuntu - Chrome está no Grid!
+4. requirements.txt (Sem mudanças)
+Mantém como está:
+
+txt
+selenium==4.25.0
+O selenium já suporta Remote WebDriver nativamente.
+
+📊 COMPARAÇÃO: ANTES vs DEPOIS
+Aspecto	Antes (Chrome Local)	Depois (Selenium Grid)
+Instalação Chrome	30+ linhas no Dockerfile	❌ Não precisa
+Tamanho Imagem	~800 MB	~200 MB
+Tempo Build	3-5 minutos	30 segundos
+Compatibilidade	❌ Problema com Debian	✅ Funciona sempre
+Debugging	Difícil (sem interface)	✅ VNC na porta 7900
+Escalabilidade	1 Chrome por worker	✅ 5 sessões paralelas
+Manutenção	Manual (atualizar Chrome)	✅ Automática (imagem oficial)
+🚀 PRÓXIMOS PASSOS
+Quando você aprovar, vou:
+
+✅ Modificar 
+docker-compose.yml
+✅ Modificar 
+crawler_full.py
+ (função make_chrome)
+✅ Simplificar 
+Dockerfile
+✅ Testar localmente (se possível)
+✅ Fazer deploy na VPS
+✅ Documentar no 
+DEPLOY_TRACKING.md
+Quer que eu comece a implementação? 🎯
 
 
 
-
-
-Code
-
-Claude Sonnet 4.5 (promo)

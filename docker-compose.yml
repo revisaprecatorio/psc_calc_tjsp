@@ -1,9 +1,29 @@
-# docker-compose.yml atualizado para o worker
+# docker-compose.yml atualizado para o worker + Selenium Grid
 
 version: "3.9"
 
 services:
-  # O nome do serviço pode ser o que você preferir
+  # NOVO: Container Selenium Grid com Chrome
+  # Resolve o problema de "user data directory is already in use"
+  selenium-chrome:
+    image: selenium/standalone-chrome:latest
+    container_name: selenium_chrome
+    ports:
+      - "4444:4444"  # Porta do Selenium Grid (WebDriver)
+      - "7900:7900"  # Porta do VNC (opcional, para debug visual)
+    shm_size: '2gb'  # Essencial para Chrome não travar
+    restart: unless-stopped
+    environment:
+      - SE_NODE_MAX_SESSIONS=5  # Permite até 5 sessões paralelas
+      - SE_NODE_SESSION_TIMEOUT=300  # Timeout de 5 minutos por sessão
+      - SE_NODE_OVERRIDE_MAX_SESSIONS=true
+      - SE_VNC_NO_PASSWORD=1  # VNC sem senha (apenas para debug local)
+    volumes:
+      # Compartilha diretórios de download com o worker
+      - ./downloads:/home/seluser/downloads
+      - ./screenshots:/home/seluser/screenshots
+
+  # MODIFICADO: Worker agora se conecta ao Selenium Grid
   worker:
     # Constrói a imagem a partir do Dockerfile local
     build: .
@@ -12,24 +32,27 @@ services:
     # Define um nome para o contêiner em execução
     container_name: tjsp_worker_1
     
+    # NOVO: Aguarda Selenium Grid iniciar antes do worker
+    depends_on:
+      - selenium-chrome
+    
     # Adicionado para carregar todas as variáveis do arquivo .env
     # Esta é a melhor forma de gerenciar segredos e configurações
     env_file:
       - .env
+    
+    # NOVO: Variável de ambiente para conectar ao Selenium Grid
+    environment:
+      - SELENIUM_REMOTE_URL=http://selenium-chrome:4444
 
     # Mapeia pastas locais para dentro do contêiner para persistir dados
     volumes:
       - ./downloads:/app/downloads
       - ./screenshots:/app/screenshots
-      - ./chrome_profile:/app/chrome_profile
+      # REMOVIDO: chrome_profile (não precisa mais - Grid gerencia)
       # Mantido o volume de certificados, caso seu crawler precise
       - ./certs:/app/certs
-      
-    # Essencial para o Chromium/Selenium não travar
-    shm_size: '2gb' # Aumentado para 2gb como boa prática para crawlers
 
     # Política de reinício: o contêiner sempre será reiniciado
     # a menos que você o pare manualmente. Perfeito para um worker.
     restart: unless-stopped
-
-# A seção 'ports' foi REMOVIDA, pois o worker não é um servidor web.
