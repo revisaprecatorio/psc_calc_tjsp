@@ -136,10 +136,16 @@ def main():
             print("="*80)
 
             caminho_download = os.path.abspath(f"downloads/{cpf_associado}")
+            
+            # CORRIGIDO: Criar user-data-dir único para cada execução
+            # Isso evita o erro "user data directory is already in use"
+            import time
+            unique_profile = f"{chrome_profile_path}_{job_id}_{i}_{int(time.time())}"
+            
             command = [
                 sys.executable, "crawler_full.py", "--doc", processo_cnj,
                 "--abrir-autos", "--baixar-pdf", "--turbo-download",
-                "--download-dir", caminho_download, "--user-data-dir", chrome_profile_path,
+                "--download-dir", caminho_download, "--user-data-dir", unique_profile,
             ]
 
             try:
