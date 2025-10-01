@@ -1,0 +1,74 @@
+✅ DOCUMENTAÇÃO ATUALIZADA E COMMIT REALIZADO
+📚 O Que Foi Feito:
+1. DEPLOY_TRACKING.md Atualizado:
+✅ Documentadas 12 tentativas de resolver o erro
+✅ Cada tentativa com data, problema, solução, commit e status
+✅ Observação crítica sobre o problema persistente
+2. Logs de Deploy Adicionados:
+✅ 
+log_deploy_13.txt
+ - Análise do problema
+✅ 
+log_deploy_14.txt
+ - Tentativa de limpeza de processos
+✅ 
+log_deploy_15.txt
+ - Flags agressivas
+✅ 
+log_deploy_16.txt
+ - Análise de certificado
+✅ 
+log_deploy_17.txt
+ - Google Chrome (932 linhas de output completo)
+3. Git Atualizado:
+bash
+Commit: 604ef12
+Mensagem: "docs: atualiza DEPLOY_TRACKING com todas tentativas de correção"
+Push: ✅ Sucesso
+🔴 RESUMO DO PROBLEMA PERSISTENTE:
+Erro:
+SessionNotCreatedException: user data directory is already in use
+Tentativas Realizadas (TODAS FALHARAM):
+❌ Diretório único por execução
+❌ Remover --user-data-dir do orchestrator
+❌ Criar temp dir único no crawler
+❌ Matar processos Chrome antes de executar
+❌ Remover completamente --user-data-dir
+❌ Adicionar 12 flags para desabilitar cache
+❌ Substituir Chromium por Google Chrome oficial
+Observações Críticas:
+✅ Google Chrome instalado com sucesso (141.0.7390.54-1)
+❌ Erro IDÊNTICO mesmo com Chrome oficial
+⏱️ Erro acontece em 0.7 segundos (antes de qualquer navegação)
+🔍 Problema é FUNDAMENTAL com Selenium/ChromeDriver no Docker
+🐛 Não é problema de binário, perfil, processos ou flags
+🎯 PRÓXIMOS PASSOS SUGERIDOS:
+Como TODAS as tentativas falharam, o problema requer uma abordagem completamente diferente:
+
+Opção 1: Selenium Grid (Recomendado)
+yaml
+# docker-compose.yml
+services:
+  selenium-chrome:
+    image: selenium/standalone-chrome:latest
+    ports:
+      - "4444:4444"
+  
+  worker:
+    depends_on:
+      - selenium-chrome
+    environment:
+      - SELENIUM_REMOTE_URL=http://selenium-chrome:4444
+Opção 2: Playwright
+python
+# Substituir Selenium por Playwright
+from playwright.sync_api import sync_playwright
+
+with sync_playwright() as p:
+    browser = p.chromium.launch(headless=True)
+    page = browser.new_page()
+Opção 3: Executar Localmente (Teste)
+Testar o crawler fora do Docker para confirmar se é problema do ambiente.
+
+Documentação completa atualizada e versionada no Git! 📝✅
+
