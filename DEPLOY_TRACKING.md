@@ -207,14 +207,24 @@ docker compose logs -f worker
 ```
 
 **Validações Pós-Deploy:**
-- [ ] Container iniciou sem erros
-- [ ] Script `manage_queue.py` executa corretamente
-- [ ] Conexão com banco de dados estabelecida
-- [ ] Query retorna jobs pendentes (se houver)
-- [ ] Worker processa jobs da fila
-- [ ] Status é atualizado no banco após processamento
+- [x] Container iniciou sem erros
+- [x] Script `manage_queue.py` executa corretamente
+- [x] Conexão com banco de dados estabelecida
+- [x] Query retorna jobs pendentes (se houver)
+- [x] Worker processa jobs da fila
+- [x] Status é atualizado no banco após processamento
 
-**Status:** 🟡 Aguardando execução
+**Resultado do Deploy:**
+```
+✅ Job ID=30 → Processado → Status atualizado
+✅ Job ID=31 → Processado → Status atualizado
+✅ Job ID=32 → Processado → Status atualizado
+✅ Comando correto: --user-data-dir /app/chrome_profile
+✅ Loop de processamento funcionando
+✅ Restart automático ativo
+```
+
+**Status:** ✅ **DEPLOY CONCLUÍDO COM SUCESSO** (2025-10-01 02:05)
 
 ---
 
@@ -435,5 +445,58 @@ docker compose logs -f worker
 
 ---
 
-**Última Atualização:** 2025-10-01 00:50  
-**Status Geral:** 🟡 Em validação (aguardando teste com jobs reais)
+## 📂 Estrutura de Arquivos e Downloads
+
+### **Diretório de Downloads:**
+
+**Dentro do Container:**
+```
+/app/downloads/{CPF}/
+```
+
+**No Host (mapeado via volume):**
+```
+/opt/crawler_tjsp/downloads/{CPF}/
+```
+
+### **Exemplo de Estrutura:**
+```
+/app/downloads/
+├── 07620857893/          ← Diretório por CPF
+│   ├── processo_1.pdf
+│   ├── processo_2.pdf
+│   └── ...
+├── 01103192817/
+│   └── ...
+└── ...
+```
+
+### **Mapeamento Docker:**
+```yaml
+volumes:
+  - ./downloads:/app/downloads
+```
+
+**Isso significa:**
+- ✅ PDFs salvos no container em `/app/downloads/{CPF}/`
+- ✅ Acessíveis no host em `/opt/crawler_tjsp/downloads/{CPF}/`
+- ✅ Persistem mesmo se o container for removido
+
+### **Comando Executado:**
+```bash
+--download-dir /app/downloads/07620857893
+```
+
+### **Para Verificar Downloads:**
+```bash
+# No servidor (host)
+ls -la /opt/crawler_tjsp/downloads/07620857893/
+
+# Dentro do container
+docker exec tjsp_worker_1 ls -la /app/downloads/07620857893/
+```
+
+---
+
+**Última Atualização:** 2025-10-01 02:07  
+**Status Geral:** ✅ **DEPLOY CONCLUÍDO E VALIDADO**
