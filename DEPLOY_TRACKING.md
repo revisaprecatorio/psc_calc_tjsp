@@ -405,6 +405,95 @@ RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | gpg --d
 - Erro acontece em 0.7 segundos (antes de qualquer navegação)
 - Indica problema fundamental com Selenium/ChromeDriver no ambiente Docker
 
+**Observação sobre Sistema Operacional:**
+- VPS Host: Ubuntu (srv987902)
+- Container Docker: **Debian Bookworm** (`python:3.12-slim-bookworm`)
+- O container NÃO usa Ubuntu, usa Debian!
+- Todas as tentativas foram corretas para Debian
+- Problema persiste independente do SO base do container
+
+---
+
+## 🎯 Próximos Passos Recomendados
+
+### **Opção A: Selenium Grid (RECOMENDADO)**
+Usar container separado com Chrome pré-configurado:
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+services:
+  selenium-chrome:
+    image: selenium/standalone-chrome:latest
+    ports:
+      - "4444:4444"
+    shm_size: 2gb
+    
+  worker:
+    build: .
+    depends_on:
+      - selenium-chrome
+    environment:
+      - SELENIUM_REMOTE_URL=http://selenium-chrome:4444
+```
+
+**Vantagens:**
+- ✅ Chrome já configurado e testado
+- ✅ Selenium oficial resolve problemas de ambiente
+- ✅ Não requer mudanças no código do crawler
+- ✅ Solução mais rápida e confiável
+
+### **Opção B: Trocar Imagem Base para Ubuntu**
+Testar se problema é específico do Debian:
+
+```dockerfile
+FROM ubuntu:22.04
+
+# Instalar Python 3.12 manualmente
+RUN apt-get update && apt-get install -y \
+    software-properties-common \
+  && add-apt-repository ppa:deadsnakes/ppa \
+  && apt-get install -y python3.12 python3.12-venv
+```
+
+**Vantagens:**
+- ✅ Testa se problema é específico do Debian
+- ❌ Mais trabalhoso (precisa instalar Python)
+- ❌ Não garante que vai resolver
+
+### **Opção C: Playwright**
+Substituir Selenium por Playwright:
+
+```python
+from playwright.sync_api import sync_playwright
+
+with sync_playwright() as p:
+    browser = p.chromium.launch(headless=True)
+    page = browser.new_page()
+```
+
+**Vantagens:**
+- ✅ Biblioteca mais moderna
+- ✅ Melhor suporte para Docker/headless
+- ❌ Requer reescrever código do crawler
+- ❌ Mais demorado
+
+---
+
+## 📊 Status Final do Deploy
+
+**Data de Conclusão:** 2025-10-01 03:28  
+**Status:** ⚠️ **BLOQUEADO** - Aguardando decisão sobre próxima abordagem
+
+**Resumo:**
+- ✅ Worker funciona corretamente (processa fila, atualiza banco)
+- ✅ Orchestrator executa crawler sem erros
+- ❌ Selenium/Chrome falha ao iniciar sessão
+- ❌ 12 tentativas de correção falharam
+- 🎯 Recomendação: Usar Selenium Grid
+
+**Logs de Deploy:** 19 arquivos documentados (`log_deploy_1.txt` até `log_deploy_19.txt`)
+
 ---
 
 ## 📦 Arquivos Modificados

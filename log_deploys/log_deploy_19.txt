@@ -1,0 +1,52 @@
+⚠️ OBSERVAÇÃO IMPORTANTE SOBRE O SISTEMA OPERACIONAL:
+Você tem razão em questionar! Vamos esclarecer:
+
+Ambiente Atual:
+VPS Host: Ubuntu (srv987902)
+Container Docker: Debian Bookworm (python:3.12-slim-bookworm)
+Por Que Isso Importa:
+dockerfile
+# Dockerfile - Linha 2
+FROM python:3.12-slim-bookworm
+O container NÃO usa Ubuntu, usa Debian Bookworm! Isso significa:
+
+✅ Todas as tentativas foram corretas para Debian
+✅ Google Chrome foi instalado do repositório Debian
+❌ Mas o problema persiste mesmo assim
+Alternativa: Usar Imagem Base Ubuntu
+Podemos tentar trocar a imagem base para Ubuntu:
+
+dockerfile
+# OPÇÃO 1: Ubuntu 22.04
+FROM ubuntu:22.04
+
+# OPÇÃO 2: Python oficial com Ubuntu (não existe oficialmente)
+# Teríamos que instalar Python manualmente
+
+# OPÇÃO 3: Imagem não-oficial Python + Ubuntu
+FROM python:3.12-slim  # Usa Debian por padrão
+🎯 Próximos Passos Quando Retomar:
+Opção A: Selenium Grid (Mais Simples)
+Container separado com Chrome pré-configurado
+Selenium oficial já resolve problemas de ambiente
+Recomendado para evitar mais debugging
+Opção B: Trocar Imagem Base para Ubuntu
+Testar se problema é específico do Debian
+Mais trabalhoso (precisa instalar Python)
+Opção C: Playwright
+Biblioteca mais moderna
+Melhor suporte para Docker/headless
+Requer reescrever código do crawler
+Por enquanto, tudo documentado e versionado no Git!
+
+Quando você quiser retomar, me avise qual caminho prefere seguir. 🚀
+
+Feedback submitted
+
+
+
+
+
+Code
+
+Claude Sonnet 4.5 (promo)
