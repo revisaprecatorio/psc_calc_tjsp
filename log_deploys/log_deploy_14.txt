@@ -1,0 +1,198 @@
+⚠️ PROBLEMA PERSISTE - Análise Mais Profunda Necessária
+O erro continua mesmo com o diretório temporário único. Isso indica que o problema NÃO é o diretório em si, mas sim processos do Chrome/Chromium que não estão sendo encerrados.
+
+🔍 Nova Hipótese:
+O Chrome está travando/não encerrando após cada execução, deixando processos zombie que bloqueiam novos lançamentos.
+
+Evidência:
+
+File "/app/crawler_full.py", line 197, in _build_chrome
+O erro acontece na linha 197, que é onde tentamos criar uma nova instância do Chrome.
+
+✅ Solução: Adicionar Limpeza de Processos
+Vamos implementar a Opção 1 que mencionei antes - matar processos do Chrome antes de cada execução:
+
+orchestrator_subprocess.py
++9
+~/…/crawler_tjsp$ git add orchestrator_subprocess.py
+
+
+~/…/crawler_tjsp$ git commit -m "fix: adiciona limpeza de processos chrome antes de cada execução
+
+- Mata processos chrome/chromium/chromedriver antes de executar crawler
+- Usa pkill -9 para forçar encerramento de processos zombie
+- Adiciona timeout de 5s para evitar travamento
+- Resolve problema de processos Chrome não encerrados
+- Combinado com temp dir único, deve resolver definitivamente"
+
+
+[main 4632426] fix: adiciona limpeza de processos chrome antes de cada execução
+ 1 file changed, 9 insertions(+)
+Exit Code 0
+~/…/crawler_tjsp$ git push origin main
+
+
+✅ NOVA CORREÇÃO APLICADA!
+🔧 O Que Foi Adicionado:
+orchestrator_subprocess.py - Antes de cada execução:
+python
+# NOVO: Matar processos antigos do Chrome
+try:
+    subprocess.run(["pkill", "-9", "chrome"], capture_output=True, timeout=5)
+    subprocess.run(["pkill", "-9", "chromium"], capture_output=True, timeout=5)
+    subprocess.run(["pkill", "-9", "chromedriver"], capture_output=True, timeout=5)
+except Exception:
+    pass  # Ignora se não houver processos para matar
+🎯 Como Funciona:
+✅ Antes de cada crawler: Mata todos os processos Chrome/Chromium/ChromeDriver
+✅ Força encerramento: Usa -9 (SIGKILL) para garantir que processos zombie sejam mortos
+✅ Timeout de 5s: Evita travamento se pkill demorar
+✅ Ignora erros: Se não houver processos, continua normalmente
+🚀 Comandos para Executar no Servidor:
+bash
+# 1. Parar o worker
+docker compose down
+
+# 2. Atualizar código
+git pull origin main
+
+# 3. Rebuild
+docker compose build
+
+# 4. Resetar job
+psql -h 72.60.62.124 -p 5432 -U admin -d n8n -c "UPDATE consultas_esaj SET status = FALSE WHERE id = 27;"
+
+# 5. Subir e ver logs
+docker compose up
+📊 O Que Deve Acontecer Agora:
+✅ Processos antigos do Chrome são mortos
+✅ Diretório temporário único é criado
+✅ Chrome inicia sem conflitos
+✅ Selenium funciona corretamente
+✅ PDFs são baixados
+Esta combinação de soluções (temp dir + kill processes) deve resolver definitivamente o problema! 🎉
+
+Execute os comandos acima e me mostre o resultado! 🚀
+
+--- EXEC ---
+
+root@srv987902:/opt/crawler_tjsp# docker compose down
+WARN[0000] /opt/crawler_tjsp/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] Running 2/2
+ ✔ Container tjsp_worker_1       Removed                                         0.0s 
+ ✔ Network crawler_tjsp_default  Removed                                         0.1s 
+root@srv987902:/opt/crawler_tjsp# git pull origin main
+remote: Enumerating objects: 5, done.
+remote: Counting objects: 100% (5/5), done.
+remote: Compressing objects: 100% (1/1), done.
+remote: Total 3 (delta 2), reused 3 (delta 2), pack-reused 0 (from 0)
+Unpacking objects: 100% (3/3), 709 bytes | 709.00 KiB/s, done.
+From https://github.com/revisaprecatorio/crawler_tjsp
+ * branch            main       -> FETCH_HEAD
+   33a7c78..4632426  main       -> origin/main
+Updating 33a7c78..4632426
+Fast-forward
+ orchestrator_subprocess.py | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+root@srv987902:/opt/crawler_tjsp# docker compose build
+WARN[0000] /opt/crawler_tjsp/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+#1 [internal] load local bake definitions
+#1 reading from stdin 496B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 1.19kB done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/python:3.12-slim-bookworm
+#3 DONE 0.4s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 2B done
+#4 DONE 0.0s
+
+#5 [1/7] FROM docker.io/library/python:3.12-slim-bookworm@sha256:25c2d6d3b4680597f42caabe8b3ade05a60bba86547cb219356d5774ab319a8a
+#5 DONE 0.0s
+
+#6 [internal] load build context
+#6 transferring context: 36.92kB 0.0s done
+#6 DONE 0.0s
+
+#7 [2/7] RUN apt-get update && apt-get install -y --no-install-recommends     wget ca-certificates gnupg2 unzip fonts-liberation     libnss3-tools openssl chromium     libnss3 libxss1 libasound2 libatk1.0-0 libgtk-3-0 libgbm1 libx11-xcb1   && rm -rf /var/lib/apt/lists/*
+#7 CACHED
+
+#8 [3/7] WORKDIR /app
+#8 CACHED
+
+#9 [5/7] RUN pip install --upgrade pip
+#9 CACHED
+
+#10 [4/7] COPY requirements.txt /app/
+#10 CACHED
+
+#11 [6/7] RUN pip install -r requirements.txt
+#11 CACHED
+
+#12 [7/7] COPY . /app/
+#12 DONE 0.1s
+
+#13 exporting to image
+#13 exporting layers
+#13 exporting layers 0.0s done
+#13 writing image sha256:129f3fc1ec0593021565b205498efe060ebd1595c705e2fadaa92f0ab3044d44 done
+#13 naming to docker.io/library/tjsp-worker:latest done
+#13 DONE 0.0s
+
+#14 resolving provenance for metadata file
+#14 DONE 0.0s
+[+] Building 1/1
+ ✔ tjsp-worker:latest  Built                                                     0.0s 
+root@srv987902:/opt/crawler_tjsp# psql -h 72.60.62.124 -p 5432 -U admin -d n8n -c "UPDATE consultas_esaj SET status = FALSE WHERE id = 27;"
+Password for user admin: 
+UPDATE 1
+root@srv987902:/opt/crawler_tjsp# docker compose up
+WARN[0000] /opt/crawler_tjsp/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] Running 2/2
+ ✔ Network crawler_tjsp_default  Created                                         0.1s 
+ ✔ Container tjsp_worker_1       Created                                         0.0s 
+Attaching to tjsp_worker_1
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Item encontrado para processar: ID=27, CPF=07620857893
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | 
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Processando item 1/1 do Job ID=27: Processo 0077044-50.2023.8.26.0500
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Executando comando: /usr/local/bin/python crawler_full.py --doc 0077044-50.2023.8.26.0500 --abrir-autos --baixar-pdf --turbo-download --download-dir /app/downloads/07620857893
+tjsp_worker_1  | 
+tjsp_worker_1  | --- Output do Crawler ---
+tjsp_worker_1  | {
+tjsp_worker_1  |   "documento": null,
+tjsp_worker_1  |   "processo": "0077044-50.2023.8.26.0500",
+tjsp_worker_1  |   "ok": false,
+tjsp_worker_1  |   "has_precatorio": false,
+tjsp_worker_1  |   "found_process_numbers": [],
+tjsp_worker_1  |   "results": [],
+tjsp_worker_1  |   "error": "SessionNotCreatedException: Message: session not created: probably user data directory is already in use, please specify a unique value for --user-data-dir argument, or don't use --user-data-dir\nStacktrace:\n#0 0x569aefd16fba <unknown>\n#1 0x569aef79b6d0 <unknown>\n#2 0x569aef7d6475 <unknown>\n#3 0x569aef7d2368 <unknown>\n#4 0x569aef821280 <unknown>\n#5 0x569aef820946 <unknown>\n#6 0x569aef812c03 <unknown>\n#7 0x569aef7df7a8 <unknown>\n#8 0x569aef7e0421 <unknown>\n#9 0x569aefcdbb28 <unknown>\n#10 0x569aefcdf87f <unknown>\n#11 0x569aefcc3c49 <unknown>\n#12 0x569aefce0405 <unknown>\n#13 0x569aefca94ff <unknown>\n#14 0x569aefd04258 <unknown>\n#15 0x569aefd04432 <unknown>\n#16 0x569aefd15fa3 <unknown>\n#17 0x70f367f211f5 <unknown>\n\nTraceback (most recent call last):\n  File \"/app/crawler_full.py\", line 1232, in go_and_extract\n    driver = _build_chrome(\n             ^^^^^^^^^^^^^^\n  File \"/app/crawler_full.py\", line 197, in _build_chrome\n    d = webdriver.Chrome(options=opts); d.set_page_load_timeout(60); return d\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/selenium/webdriver/chrome/webdriver.py\", line 45, in __init__\n    super().__init__(\n  File \"/usr/local/lib/python3.12/site-packages/selenium/webdriver/chromium/webdriver.py\", line 66, in __init__\n    super().__init__(command_executor=executor, options=options)\n  File \"/usr/local/lib/python3.12/site-packages/selenium/webdriver/remote/webdriver.py\", line 212, in __init__\n    self.start_session(capabilities)\n  File \"/usr/local/lib/python3.12/site-packages/selenium/webdriver/remote/webdriver.py\", line 299, in start_session\n    response = self.execute(Command.NEW_SESSION, caps)[\"value\"]\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/selenium/webdriver/remote/webdriver.py\", line 354, in execute\n    self.error_handler.check_response(response)\n  File \"/usr/local/lib/python3.12/site-packages/selenium/webdriver/remote/errorhandler.py\", line 229, in check_response\n    raise exception_class(message, screen, stacktrace)\nselenium.common.exceptions.SessionNotCreatedException: Message: session not created: probably user data directory is already in use, please specify a unique value for --user-data-dir argument, or don't use --user-data-dir\nStacktrace:\n#0 0x569aefd16fba <unknown>\n#1 0x569aef79b6d0 <unknown>\n#2 0x569aef7d6475 <unknown>\n#3 0x569aef7d2368 <unknown>\n#4 0x569aef821280 <unknown>\n#5 0x569aef820946 <unknown>\n#6 0x569aef812c03 <unknown>\n#7 0x569aef7df7a8 <unknown>\n#8 0x569aef7e0421 <unknown>\n#9 0x569aefcdbb28 <unknown>\n#10 0x569aefcdf87f <unknown>\n#11 0x569aefcc3c49 <unknown>\n#12 0x569aefce0405 <unknown>\n#13 0x569aefca94ff <unknown>\n#14 0x569aefd04258 <unknown>\n#15 0x569aefd04432 <unknown>\n#16 0x569aefd15fa3 <unknown>\n#17 0x70f367f211f5 <unknown>\n\n",
+tjsp_worker_1  |   "downloaded_files": [],
+tjsp_worker_1  |   "started_at": "2025-10-01 03:05:07",
+tjsp_worker_1  |   "finished_at": "2025-10-01 03:05:08",
+tjsp_worker_1  |   "last_url": null,
+tjsp_worker_1  |   "duration_seconds": 0.723,
+tjsp_worker_1  |   "duration_hms": "0m01s"
+tjsp_worker_1  | }
+tjsp_worker_1  | 
+tjsp_worker_1  | --- Fim do Output ---
+tjsp_worker_1  | 
+tjsp_worker_1  | 
+tjsp_worker_1  | Atualizando status para 'processado = TRUE' para o ID: 27
+tjsp_worker_1  | [SUCESSO] Status atualizado para o ID 27.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1 exited with code 0
+root@srv987902:/opt/crawler_tjsp# 
+
+w Enable Watch

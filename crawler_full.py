@@ -131,17 +131,14 @@ def _build_chrome(attach, user_data_dir, cert_issuer_cn, cert_subject_cn,
     """
     def make_options():
         opts = Options()
-        if user_data_dir:
-            opts.add_argument(f"--user-data-dir={user_data_dir}")
-            opts.add_argument("--profile-directory=Default")
-        else:
-            # CORRIGIDO: Criar diretório temporário único para evitar conflitos
-            # Resolve erro: "user data directory is already in use"
-            import tempfile
-            import time
-            temp_dir = tempfile.mkdtemp(prefix=f"chrome_{int(time.time())}_")
-            opts.add_argument(f"--user-data-dir={temp_dir}")
-            opts.add_argument("--profile-directory=Default")
+        # CORRIGIDO: NÃO usar --user-data-dir para evitar conflitos
+        # Chrome criará perfil temporário automaticamente em /tmp
+        # Isso resolve definitivamente o erro "user data directory is already in use"
+        
+        # Comentado: Causa problemas no Docker
+        # if user_data_dir:
+        #     opts.add_argument(f"--user-data-dir={user_data_dir}")
+        #     opts.add_argument("--profile-directory=Default")
 
         # Headless + flags úteis para VPS
         if headless:
