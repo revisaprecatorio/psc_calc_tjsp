@@ -1,8 +1,36 @@
 # 🚀 DEPLOY SELENIUM GRID - INSTRUÇÕES
 
 **Data:** 2025-10-01  
-**Commit:** f69fdab  
+**Commit:** f69fdab, b5897d9, cb00c05  
+**Servidor:** srv987902.hstgr.cloud (72.60.62.124)  
+**Localização do Projeto:** `/opt/crawler_tjsp`  
 **Objetivo:** Resolver erro "user data directory is already in use" usando Selenium Grid
+
+---
+
+## 📍 INFORMAÇÕES DO AMBIENTE
+
+### **Localização do Projeto:**
+```
+Diretório: /opt/crawler_tjsp
+Repositório: https://github.com/revisaprecatorio/crawler_tjsp
+Branch: main
+```
+
+### **Containers Existentes:**
+```bash
+# Verificar containers relacionados ao TJSP
+docker ps -a | grep tjsp
+
+# Esperado:
+# - tjsp_worker_1 (worker atual - será atualizado)
+# - ocr-oficios-tjsp-* (outros projetos - não mexer)
+```
+
+### **IMPORTANTE:**
+- ⚠️ O projeto está em `/opt/crawler_tjsp` (não `/root/crawler_tjsp`)
+- ⚠️ Existem outros containers TJSP (OCR) que devem permanecer intactos
+- ⚠️ Apenas o container `tjsp_worker_1` será modificado
 
 ---
 
@@ -24,13 +52,29 @@
 
 ## 🔧 COMANDOS DE DEPLOY NA VPS
 
-### **1. Conectar na VPS**
+### **0. Conectar na VPS e Localizar Projeto**
 ```bash
+# Conectar na VPS
 ssh root@srv987902.hstgr.cloud
-cd /root/crawler_tjsp
+
+# Verificar localização do projeto (se necessário)
+find /root -name "crawler_tjsp" -type d 2>/dev/null
+ls -la /opt/
+
+# Navegar para o diretório do projeto
+cd /opt/crawler_tjsp
+
+# Verificar containers existentes
+docker ps -a | grep tjsp
+
+# Verificar branch atual
+git branch
+git status
 ```
 
-### **2. Fazer Backup (Segurança)**
+**IMPORTANTE:** O projeto está localizado em `/opt/crawler_tjsp` (não `/root/crawler_tjsp`)
+
+### **1. Fazer Backup (Segurança)**
 ```bash
 # Backup do docker-compose.yml antigo
 cp docker-compose.yml docker-compose.yml.backup-$(date +%Y%m%d_%H%M%S)
@@ -39,16 +83,19 @@ cp docker-compose.yml docker-compose.yml.backup-$(date +%Y%m%d_%H%M%S)
 cp Dockerfile Dockerfile.backup-$(date +%Y%m%d_%H%M%S)
 ```
 
-### **3. Atualizar Código do Git**
+### **2. Atualizar Código do Git**
 ```bash
 # Pull das mudanças
 git pull origin main
 
 # Verificar mudanças
 git log -1 --stat
+
+# Verificar arquivos modificados
+git diff HEAD~1 --name-only
 ```
 
-### **4. Parar Containers Atuais**
+### **3. Parar Containers Atuais**
 ```bash
 # Para todos os containers
 docker compose down
@@ -57,7 +104,7 @@ docker compose down
 docker ps -a
 ```
 
-### **5. Limpar Imagens Antigas (Opcional)**
+### **4. Limpar Imagens Antigas (Opcional)**
 ```bash
 # Remove imagem antiga do worker (economiza espaço)
 docker rmi tjsp-worker:latest
@@ -66,7 +113,7 @@ docker rmi tjsp-worker:latest
 docker image prune -f
 ```
 
-### **6. Rebuild com Selenium Grid**
+### **5. Rebuild com Selenium Grid**
 ```bash
 # Build sem cache (garante imagem limpa)
 docker compose build --no-cache
@@ -79,7 +126,7 @@ docker images | grep tjsp-worker
 - Imagem antiga: ~800 MB
 - Imagem nova: ~200 MB ✅
 
-### **7. Iniciar Containers**
+### **6. Iniciar Containers**
 ```bash
 # Inicia em modo detached
 docker compose up -d
@@ -95,7 +142,7 @@ selenium_chrome     selenium/standalone-chrome:latest  Up
 tjsp_worker_1       tjsp-worker:latest                 Up
 ```
 
-### **8. Verificar Logs**
+### **7. Verificar Logs**
 ```bash
 # Logs do Selenium Grid
 docker compose logs selenium-chrome
@@ -110,7 +157,7 @@ docker compose logs -f worker
 [INFO] ✅ Conectado ao Selenium Grid com sucesso!
 ```
 
-### **9. Testar Conexão ao Grid**
+### **8. Testar Conexão ao Grid**
 ```bash
 # Verificar status do Selenium Grid
 curl http://localhost:4444/status
@@ -118,7 +165,7 @@ curl http://localhost:4444/status
 # Deve retornar JSON com "ready": true
 ```
 
-### **10. Validar Processamento**
+### **9. Validar Processamento**
 ```bash
 # Verificar fila
 docker exec tjsp_worker_1 python manage_queue.py --status
@@ -340,6 +387,49 @@ Após validar que tudo funciona:
 2. ✅ Verificar estabilidade
 3. ✅ Documentar no DEPLOY_TRACKING.md
 4. ✅ Remover backups antigos (após 1 semana)
+
+---
+
+## ⚡ RESUMO RÁPIDO - COMANDOS COPY-PASTE
+
+Para deploy rápido, execute em sequência:
+
+```bash
+# 1. Conectar e navegar
+ssh root@srv987902.hstgr.cloud
+cd /opt/crawler_tjsp
+
+# 2. Backup
+cp docker-compose.yml docker-compose.yml.backup-$(date +%Y%m%d_%H%M%S)
+cp Dockerfile Dockerfile.backup-$(date +%Y%m%d_%H%M%S)
+
+# 3. Atualizar código
+git pull origin main
+git log -1 --stat
+
+# 4. Parar containers
+docker compose down
+
+# 5. Limpar imagens antigas (opcional)
+docker rmi tjsp-worker:latest
+docker image prune -f
+
+# 6. Rebuild
+docker compose build --no-cache
+
+# 7. Iniciar
+docker compose up -d
+
+# 8. Verificar
+docker compose ps
+docker compose logs -f worker
+
+# 9. Testar Grid
+curl http://localhost:4444/status
+
+# 10. Validar processamento
+docker exec tjsp_worker_1 python manage_queue.py --status
+```
 
 ---
 
