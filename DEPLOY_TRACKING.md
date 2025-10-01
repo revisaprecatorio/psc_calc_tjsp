@@ -11,24 +11,77 @@
 
 ## 🎯 STATUS ATUAL
 
-**Última Atualização:** 2025-10-01 14:47:00  
-**Status:** ✅ **IMPLEMENTAÇÃO SELENIUM GRID CONCLUÍDA** - Aguardando deploy e testes na VPS
+**Última Atualização:** 2025-10-01 19:08:00  
+**Status:** ✅ **SELENIUM GRID FUNCIONANDO!** - Configurando certificado digital
 
 **Resumo:**
-- ✅ Solução Selenium Grid implementada
-- ✅ 3 arquivos principais modificados
-- ✅ Dockerfile simplificado (70% menor)
-- ✅ Documentação completa criada
-- ⏸️ Aguardando deploy na VPS para validação
+- ✅ Selenium Grid deployado e testado na VPS
+- ✅ Worker conecta ao Grid sem erros
+- ✅ Problema "user data directory" RESOLVIDO definitivamente
+- ✅ 5 jobs processados com sucesso (IDs 28-32)
+- 🔐 Próximo: Configurar certificado digital para autenticação CAS
 
 ---
 
 ## 📝 HISTÓRICO DE MUDANÇAS
 
+### **[14] SUCESSO: Selenium Grid Deployado e Testado na VPS**
+**Timestamp:** 2025-10-01 19:08:00  
+**Status:** ✅ **SUCESSO TOTAL**
+
+#### **Resultado do Deploy:**
+
+**Deploy Executado:**
+```bash
+# 1. Reset de 5 registros no PostgreSQL
+UPDATE consultas_esaj SET status = FALSE WHERE id IN (...) → 5 registros
+
+# 2. Containers iniciados
+selenium_chrome: Up 9 minutes
+tjsp_worker_1: Started successfully
+
+# 3. Processamento executado
+- Job ID=28 (3 processos) → Processado
+- Job ID=29 (2 processos) → Processado  
+- Job ID=30 (1 processo) → Processado
+- Job ID=31 (1 processo) → Processado
+- Job ID=32 (1 processo) → Processado
+```
+
+**Logs de Sucesso:**
+```
+[INFO] Conectando ao Selenium Grid: http://selenium-chrome:4444
+[INFO] ✅ Conectado ao Selenium Grid com sucesso!
+```
+
+**Validações:**
+- ✅ Selenium Grid iniciou corretamente
+- ✅ Worker conecta ao Grid sem erros
+- ✅ Problema "user data directory is already in use" **RESOLVIDO**
+- ✅ 5 jobs processados (8 processos totais)
+- ✅ Status atualizado no banco (TRUE)
+- ✅ Screenshots salvos para cada processo
+
+**Problema Identificado:**
+```
+"error": "RuntimeError: CAS: autenticação necessária e não realizada."
+"last_url": "https://esaj.tjsp.jus.br/sajcas/login?..."
+```
+
+**Causa:** Site TJSP exige autenticação via:
+- Certificado Digital (e-CPF/e-CNPJ) OU
+- Login com CPF/CNPJ + Senha
+
+**Próximo Passo:** Configurar certificado digital `.pfx` no ambiente
+
+**Arquivo de Log:** `log_deploy_20.txt` (413 linhas)
+
+---
+
 ### **[13] SOLUÇÃO DEFINITIVA: Selenium Grid Implementado**
 **Timestamp:** 2025-10-01 14:47:00  
-**Commits:** `f69fdab`, `b5897d9`  
-**Status:** ✅ **IMPLEMENTADO** - Aguardando testes
+**Commits:** `f69fdab`, `b5897d9`, `cb00c05`, `4d776ea`  
+**Status:** ✅ **IMPLEMENTADO E TESTADO**
 
 #### **Contexto:**
 Após 12 tentativas falhadas de resolver o erro "user data directory is already in use", foi decidido implementar **Selenium Grid** como solução definitiva. Esta abordagem usa um container separado com Chrome pré-configurado, eliminando completamente os problemas de ambiente.
