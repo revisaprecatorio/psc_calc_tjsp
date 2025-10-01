@@ -1,0 +1,90 @@
+Agora vamos analisar o problema do Chrome. Vou verificar o crawler_full.py:
+
+Encontrei! O 
+crawler_full.py
+ ainda aceita e usa o argumento --user-data-dir internamente. Mesmo que o orchestrator não passe mais, o crawler pode estar pegando de outra fonte (variável de ambiente ou valor padrão).
+
+Vamos verificar se há variável de ambiente sendo usada:
+
+Searched
+CHROME_USER_DATA_DIR in crawler_full.py (0)
+Agora vamos ver onde user_data_dir é definido na função principal:
+
+Perfeito! Agora entendi completamente o problema. O 
+crawler_full.py
+ recebe args.user_data_dir que pode ser None, mas o Chrome ainda está tentando usar algum diretório padrão.
+
+Vamos verificar se há algum valor padrão sendo usado quando user_data_dir é None:
+
+✅ Documentação Atualizada e Problema Identificado!
+📚 O Que Foi Feito:
+1. DEPLOY_TRACKING.md Atualizado:
+✅ Adicionado Problema #6: Selenium não baixava PDFs (resolvido)
+✅ Adicionado Problema #7: Chrome user-data-dir em uso (em investigação)
+✅ Documentadas todas as tentativas e soluções
+2. Logs de Deploy Adicionados ao Git:
+✅ 12 arquivos de log detalhados (
+log_deploy_1.txt
+ até 
+log_deploy_12.txt
+)
+✅ Token sensível removido do log_deploy_11.txt
+✅ Commit e push realizados com sucesso
+🔍 ANÁLISE DO PROBLEMA - Chrome user-data-dir
+Descoberta:
+O 
+crawler_full.py
+ ainda está usando user-data-dir internamente, mesmo que o orchestrator não passe mais o argumento!
+
+Código problemático:
+
+python
+# crawler_full.py - Linha 134-136
+if user_data_dir:
+    opts.add_argument(f"--user-data-dir={user_data_dir}")
+    opts.add_argument("--profile-directory=Default")
+Causa Raiz:
+Quando user_data_dir=None (que é o caso agora), o Chrome NÃO deveria adicionar o argumento. Mas o erro persiste, o que indica uma de duas coisas:
+
+Hipótese A: Há um processo antigo do Chrome ainda rodando no container
+Hipótese B: O Chrome está usando um diretório padrão do sistema que está bloqueado
+✅ Solução Proposta:
+Opção 1: Limpar Processos do Chrome no Container
+Adicionar um comando para matar processos do Chrome antes de cada execução:
+
+python
+# No orchestrator_subprocess.py, antes de executar o crawler:
+import subprocess
+subprocess.run(["pkill", "-9", "chrome"], capture_output=True)
+subprocess.run(["pkill", "-9", "chromium"], capture_output=True)
+Opção 2: Forçar Diretório Temporário Único no Crawler
+Modificar o 
+crawler_full.py
+ para sempre criar um diretório temporário:
+
+python
+# crawler_full.py - Linha 132-136
+def make_options():
+    opts = Options()
+    if user_data_dir:
+        opts.add_argument(f"--user-data-dir={user_data_dir}")
+    else:
+        # NOVO: Criar diretório temporário único
+        import tempfile
+        temp_dir = tempfile.mkdtemp(prefix="chrome_")
+        opts.add_argument(f"--user-data-dir={temp_dir}")
+    
+    opts.add_argument("--profile-directory=Default")
+Opção 3: Adicionar Flag --disable-dev-shm-usage Mais Agressiva
+python
+opts.add_argument("--disable-dev-shm-usage")
+opts.add_argument("--disable-software-rasterizer")
+opts.add_argument("--disable-extensions")
+opts.add_argument("--disable-background-networking")
+🎯 Recomendação:
+Vamos com a Opção 2 - modificar o 
+crawler_full.py
+ para criar um diretório temporário único quando user_data_dir não for fornecido.
+
+Quer que eu implemente essa solução? 🚀
+
