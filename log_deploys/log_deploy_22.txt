@@ -1,0 +1,163 @@
+Vejo que o certificado foi configurado corretamente, mas ainda está dando erro de autenticação. O problema é que o certificado .pfx precisa ser carregado no navegador Chrome do Selenium Grid, não apenas estar presente no filesystem.
+
+Vamos investigar e corrigir. Primeiro, vamos ver os screenshots de erro para entender o que está acontecendo:
+
+🔍 DIAGNÓSTICO
+bash
+# Na VPS, verificar screenshots de erro
+ls -lh /opt/crawler_tjsp/screenshots/erro_*_20251001_1949*.png
+
+# Ver HTML do erro (para entender o que o site está mostrando)
+cat /opt/crawler_tjsp/screenshots/erro_0223266_55_2021_8_26_0500_20251001_194944.html | head -50
+🔧 PROBLEMA IDENTIFICADO
+O certificado .pfx está no worker, mas o Chrome roda no container Selenium Grid. Precisamos:
+
+Copiar o certificado para o Selenium Grid, OU
+Converter .pfx para .pem e configurar no Chrome, OU
+Usar autenticação por login/senha (mais simples)
+💡 SOLUÇÃO RECOMENDADA: Verificar o Código
+Vamos ver como o 
+crawler_full.py
+ está tentando usar o certificado:
+
+bash
+# Na VPS
+grep -n "CERT_PATH\|cert_path\|pfx" /opt/crawler_tjsp/crawler_full.py | head -20
+Me envie o output para eu ver como o código está configurado.
+
+🔄 ALTERNATIVA TEMPORÁRIA: Login com CPF/Senha
+Se o site TJSP aceitar login com CPF/senha (além de certificado), podemos testar assim:
+
+bash
+# Editar .env
+nano /opt/crawler_tjsp/.env
+Adicionar:
+
+bash
+# Autenticação CAS (alternativa ao certificado)
+CAS_USUARIO=51764890230
+CAS_SENHA=SUA_SENHA_AQUI
+Reiniciar:
+
+bash
+docker compose restart worker
+📊 PRÓXIMOS PASSOS
+Execute estes comandos e me envie os outputs:
+
+bash
+# 1. Ver como o código usa o certificado
+grep -A 10 "CERT_PATH" /opt/crawler_tjsp/crawler_full.py
+
+# 2. Ver função de login CAS
+grep -A 30 "_maybe_cas_login" /opt/crawler_tjsp/crawler_full.py | head -50
+
+# 3. Ver screenshot de erro (se possível, baixar e visualizar)
+ls -lh /opt/crawler_tjsp/screenshots/erro_*_20251001_1949*.png
+Qual você prefere:
+
+Investigar o código para corrigir o certificado?
+Tentar login com CPF/senha (se você tiver)?
+Baixar e analisar os screenshots de erro?
+
+--- EXEC --- 
+
+root@srv987902:/opt/crawler_tjsp# grep -A 10 "CERT_PATH" /opt/crawler_tjsp/crawler_full.py
+root@srv987902:/opt/crawler_tjsp# grep -A 30 "_maybe_cas_login" /opt/crawler_tjsp/crawler_full.py | head -50
+def _maybe_cas_login(wait, driver, cert_subject_cn, user=None, pwd=None, payload=None):
+    if "sajcas/login" not in (driver.current_url or ""):
+        debug(payload, "CAS: não precisou logar (já dentro).")
+        return
+    try:
+        debug(payload, "CAS: tentando aba CERTIFICADO…")
+        _switch_to_tab(wait, (By.ID, "linkAbaCertificado"))
+        wait.until(EC.presence_of_element_located((By.ID, "certificados")))
+        def options_ready(drv):
+            try:
+                els = drv.find_elements(By.CSS_SELECTOR, "#certificados option")
+                if not els: return False
+                first = (els[0].text or "").strip().lower()
+                return not (len(els) == 1 and "carregando" in first)
+            except: return False
+        wait.until(options_ready)
+        subj_hint = cert_subject_cn.split(":")[0].strip() if cert_subject_cn else None
+        def pick():
+            els = driver.find_elements(By.CSS_SELECTOR, "#certificados option"); ch = None
+            if subj_hint:
+                for o in els:
+                    if subj_hint.lower() in ((o.text or "").lower()): ch = o; break
+            if not ch:
+                for o in els:
+                    if (o.get_attribute("value") or '').strip(): ch = o; break
+            return ch
+        ch = pick()
+        if not ch: raise RuntimeError("CAS: nenhum certificado disponível.")
+        driver.execute_script("""
+            const opt=arguments[0], sel=document.querySelector('#certificados');
+            sel.value=opt.value; sel.dispatchEvent(new Event('change',{bubbles:true}));
+--
+        _maybe_cas_login(wait, driver, cert_subject_cn, user=cas_usuario, pwd=cas_senha, payload=payload)
+
+        if process_number:
+            _select_criterio_processo(wait, driver, process_number)
+        else:
+            _select_criterio_documento(wait, driver)
+            inp = wait.until(EC.visibility_of_element_located((By.ID, "campo_DOCPARTE")))
+            inp.clear(); inp.send_keys(doc_number)
+
+        if not _submit_consulta(wait, driver, payload):
+            raise TimeoutException("Não consegui acionar o 'Consultar'.")
+        debug(payload, "Consulta enviada.")
+
+        kind = _wait_result_page(driver, timeout=60, payload=payload)
+        if kind == "lista":
+            processos = driver.find_elements(By.CSS_SELECTOR, "a.linkProcesso, a[class*='numeroProcesso']")
+            found = _extract_process_numbers_from_elements(processos)
+            debug(payload, f"Resultados (lista): {len(found)} processo(s).")
+root@srv987902:/opt/crawler_tjsp# ls -lh /opt/crawler_tjsp/screenshots/erro_*_20251001_1949*.png
+-rw-r--r-- 1 root root 63K Oct  1 22:49 /opt/crawler_tjsp/screenshots/erro_0179487_50_2021_8_26_0500_20251001_194950.png
+-rw-r--r-- 1 root root 63K Oct  1 22:49 /opt/crawler_tjsp/screenshots/erro_0223266_55_2021_8_26_0500_20251001_194944.png
+-rw-r--r-- 1 root root 63K Oct  1 22:49 /opt/crawler_tjsp/screenshots/erro_7007473_24_2010_8_26_0500_20251001_194957.png
+root@srv987902:/opt/crawler_tjsp# 
+
+
+Perfeito! Agora entendi o problema. O código já está preparado para usar certificado, mas ele espera que o certificado esteja instalado no navegador Chrome, não apenas o arquivo .pfx no filesystem.
+
+Vejo no código que ele tenta:
+
+Clicar na aba "CERTIFICADO"
+Selecionar um certificado da lista
+Mas não encontra nenhum certificado disponível → "CAS: nenhum certificado disponível."
+🔧 PROBLEMA REAL
+O certificado .pfx está no worker, mas o Chrome roda no Selenium Grid. O Selenium Grid não tem acesso ao arquivo .pfx e não pode carregar o certificado automaticamente.
+
+💡 SOLUÇÕES POSSÍVEIS
+Opção 1: Usar Login com CPF/Senha (MAIS SIMPLES)
+Se o site aceitar login com CPF/senha, é a solução mais rápida:
+
+bash
+# Na VPS
+nano /opt/crawler_tjsp/.env
+Adicionar ao final do arquivo:
+
+bash
+# Autenticação CAS com CPF/Senha
+CAS_USUARIO=51764890230
+CAS_SENHA=SUA_SENHA_AQUI
+Salvar e reiniciar:
+
+bash
+docker compose restart worker
+Opção 2: Configurar Certificado no Selenium Grid (COMPLEXO)
+Precisaria:
+
+Converter .pfx para formato que o Chrome aceita
+Montar volume no Selenium Grid
+Configurar Chrome para usar o certificado
+Isso é mais complexo e pode não funcionar bem com Selenium Grid.
+
+🎯 RECOMENDAÇÃO
+Você tem login/senha para o site TJSP? Se sim, use a Opção 1 (muito mais simples).
+
+Se não tiver, precisamos investigar como fazer o Selenium Grid aceitar certificados, o que pode ser bem complexo.
+
+OPCAO 2 é a unica opção 

@@ -11,19 +11,97 @@
 
 ## 🎯 STATUS ATUAL
 
-**Última Atualização:** 2025-10-01 19:08:00  
-**Status:** ✅ **SELENIUM GRID FUNCIONANDO!** - Configurando certificado digital
+**Última Atualização:** 2025-10-01 20:30:00  
+**Status:** ⏸️ **AGUARDANDO VALIDAÇÃO DE CREDENCIAIS**
 
 **Resumo:**
-- ✅ Selenium Grid deployado e testado na VPS
-- ✅ Worker conecta ao Grid sem erros
-- ✅ Problema "user data directory" RESOLVIDO definitivamente
-- ✅ 5 jobs processados com sucesso (IDs 28-32)
-- 🔐 Próximo: Configurar certificado digital para autenticação CAS
+- ✅ Selenium Grid funcionando perfeitamente
+- ✅ Código modificado para priorizar login CPF/senha
+- ✅ Sistema de autenticação testado manualmente
+- ❌ **BLOQUEIO:** Credenciais do certificado (CPF 517.648.902-30) inválidas
+- ⏸️ **Aguardando:** Validação com detentor do certificado
+
+**Descoberta Importante:**
+- Site e-SAJ aceita login com CPF/senha (testado com sucesso)
+- Problema não é técnico, é de credenciais incorretas
+- Necessário validar: CPF cadastrado + senha correta + perfil advogado
 
 ---
 
 ## 📝 HISTÓRICO DE MUDANÇAS
+
+### **[15] BLOQUEIO: Problema de Credenciais Identificado**
+**Timestamp:** 2025-10-01 20:30:00  
+**Commit:** `09505e0`  
+**Status:** ⏸️ **AGUARDANDO VALIDAÇÃO**
+
+#### **Descoberta:**
+
+Após implementar Selenium Grid e modificar código para login CPF/senha, descobrimos que o problema não é técnico, mas de **credenciais inválidas**.
+
+**Testes Manuais Realizados:**
+
+1. **CPF do Certificado (517.648.902-30) + Senha (903205):**
+   - ❌ Resultado: "Usuário ou senha inválidos"
+   - Testado na aba CPF/CNPJ
+   - Testado com certificado digital
+
+2. **CPF Pessoal (073.019.918-51) + Senha válida:**
+   - ✅ Resultado: Login bem-sucedido!
+   - Passou por validação 2FA (código por email)
+   - Entrou no sistema e-SAJ
+   - ⚠️ Limitação: Não tem perfil de advogado (não acessa processos)
+
+**Conclusões:**
+
+1. ✅ **Sistema de autenticação funciona perfeitamente**
+   - Site aceita login com CPF/senha
+   - Não requer certificado obrigatoriamente
+   - Sistema tem 2FA por email
+
+2. ❌ **Credenciais do certificado estão incorretas**
+   - CPF 517.648.902-30 não está cadastrado OU
+   - Senha 903205 está incorreta OU
+   - Conta não tem perfil adequado
+
+3. 🔐 **Certificado Digital + Web Signer:**
+   - Site exige plugin Web Signer para usar certificado
+   - Selenium Grid não tem esse plugin
+   - Certificado sozinho não funciona (precisa senha do e-SAJ também)
+
+**Modificações no Código:**
+
+Arquivo `crawler_full.py` - Função `_maybe_cas_login()`:
+- Modificado para tentar CPF/senha PRIMEIRO
+- Fallback para certificado (se disponível)
+- Logs mais detalhados para debug
+
+**Próximos Passos:**
+
+1. ⏸️ **Aguardar validação com detentor do certificado:**
+   - Confirmar CPF está cadastrado no Portal e-SAJ
+   - Obter senha correta do Portal (não a senha do .pfx)
+   - Verificar se conta tem perfil de advogado
+   - Testar login manual antes de automatizar
+
+2. 🔄 **Após obter credenciais válidas:**
+   - Atualizar `.env` com credenciais corretas
+   - Testar login manual no site
+   - Deploy e teste automatizado
+   - Validar acesso aos processos
+
+**Arquivos de Log:**
+- `log_deploy_21.txt` - Configuração do certificado
+- `log_deploy_22.txt` - Investigação do problema
+- `log_deploy_23.txt` - Testes de autenticação
+- `log_deploy_24.txt` - Descoberta e documentação (a criar)
+
+**Evidências:**
+- 8 screenshots do teste manual de autenticação
+- HTML da página de login analisado
+- Confirmação de que sistema aceita CPF/senha
+
+---
 
 ### **[14] SUCESSO: Selenium Grid Deployado e Testado na VPS**
 **Timestamp:** 2025-10-01 19:08:00  

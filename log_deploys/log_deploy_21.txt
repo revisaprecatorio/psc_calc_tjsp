@@ -1,0 +1,267 @@
+root@srv987902:/opt/crawler_tjsp# mkdir -p certs
+root@srv987902:/opt/crawler_tjsp# chmod 700 certs
+root@srv987902:/opt/crawler_tjsp# nano .env
+root@srv987902:/opt/crawler_tjsp# chmod 600 certs/25424636_pf.pfx
+root@srv987902:/opt/crawler_tjsp# chmod 600 .env
+root@srv987902:/opt/crawler_tjsp# ls -lh certs/
+total 4.0K
+-rw------- 1 root root 3.8K Oct  1 22:33 25424636_pf.pfx
+root@srv987902:/opt/crawler_tjsp# ls -lh .env
+-rw------- 1 root root 583 Oct  1 22:35 .env
+root@srv987902:/opt/crawler_tjsp# cat docker-compose.yml | grep -A 10 volumes
+    volumes:
+      # Compartilha diretórios de download com o worker
+      - ./downloads:/home/seluser/downloads
+      - ./screenshots:/home/seluser/screenshots
+
+  # MODIFICADO: Worker agora se conecta ao Selenium Grid
+  worker:
+    # Constrói a imagem a partir do Dockerfile local
+    build: .
+    # Define um nome para a imagem construída
+    image: tjsp-worker:latest
+--
+    volumes:
+      - ./downloads:/app/downloads
+      - ./screenshots:/app/screenshots
+      # REMOVIDO: chrome_profile (não precisa mais - Grid gerencia)
+      # Mantido o volume de certificados, caso seu crawler precise
+      - ./certs:/app/certs
+
+    # Política de reinício: o contêiner sempre será reiniciado
+    # a menos que você o pare manualmente. Perfeito para um worker.
+    restart: unless-stopped
+root@srv987902:/opt/crawler_tjsp# nano docker-compose.yml
+root@srv987902:/opt/crawler_tjsp# docker compose stop worker
+WARN[0000] /opt/crawler_tjsp/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] Stopping 1/1
+ ✔ Container tjsp_worker_1  Stopped                                              0.0s 
+root@srv987902:/opt/crawler_tjsp# docker compose config | grep CERT
+WARN[0000] /opt/crawler_tjsp/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+      CERT_ISSUER_CN: AC Certisign Múltipla G5
+      CERT_PASSWORD: "903205"
+      CERT_PATH: /app/certs/25424636_pf.pfx
+      CERT_SUBJECT_CN: 517.648.902-30
+root@srv987902:/opt/crawler_tjsp# docker compose up -d worker
+WARN[0000] /opt/crawler_tjsp/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] Running 2/2
+ ✔ Container selenium_chrome  Running                                            0.0s 
+ ✔ Container tjsp_worker_1    Started                                            0.2s 
+root@srv987902:/opt/crawler_tjsp# docker compose logs -f worker
+WARN[0000] /opt/crawler_tjsp/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1 exited with code 0
+root@srv987902:/opt/crawler_tjsp# psql -h 72.60.62.124 -U admin -d n8n -c "-c "
+UPDATE consultas_esaj 
+SET status = FALSE 
+WHERE id = 28;"
+Password for user admin: 
+UPDATE 1
+root@srv987902:/opt/crawler_tjsp# docker compose logs -f worker
+WARN[0000] /opt/crawler_tjsp/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Item encontrado para processar: ID=28, CPF=06495530803
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | 
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Processando item 1/3 do Job ID=28: Processo 0223266-55.2021.8.26.0500
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Executando comando: /usr/local/bin/python crawler_full.py --doc 0223266-55.2021.8.26.0500 --abrir-autos --baixar-pdf --turbo-download --download-dir /app/downloads/06495530803
+tjsp_worker_1  | 
+tjsp_worker_1  | --- Output do Crawler ---
+tjsp_worker_1  | [INFO] Conectando ao Selenium Grid: http://selenium-chrome:4444
+tjsp_worker_1  | [INFO] ✅ Conectado ao Selenium Grid com sucesso!
+tjsp_worker_1  | {
+tjsp_worker_1  |   "documento": null,
+tjsp_worker_1  |   "processo": "0223266-55.2021.8.26.0500",
+tjsp_worker_1  |   "ok": false,
+tjsp_worker_1  |   "has_precatorio": false,
+tjsp_worker_1  |   "found_process_numbers": [],
+tjsp_worker_1  |   "results": [],
+tjsp_worker_1  |   "error": "RuntimeError: CAS: autenticação necessária e não realizada.\nTraceback (most recent call last):\n  File \"/app/crawler_full.py\", line 1268, in go_and_extract\n    _maybe_cas_login(wait, driver, cert_subject_cn, user=cas_usuario, pwd=cas_senha, payload=payload)\n  File \"/app/crawler_full.py\", line 300, in _maybe_cas_login\n    raise RuntimeError(\"CAS: autenticação necessária e não realizada.\")\nRuntimeError: CAS: autenticação necessária e não realizada.\n",
+tjsp_worker_1  |   "downloaded_files": [],
+tjsp_worker_1  |   "started_at": "2025-10-01 19:49:36",
+tjsp_worker_1  |   "finished_at": "2025-10-01 19:49:44",
+tjsp_worker_1  |   "last_url": "https://esaj.tjsp.jus.br/sajcas/login?service=https%3A%2F%2Fesaj.tjsp.jus.br%2Fcpopg%2Fj_spring_cas_security_check",
+tjsp_worker_1  |   "error_html_path": "screenshots/erro_0223266_55_2021_8_26_0500_20251001_194944.html",
+tjsp_worker_1  |   "error_screenshot_path": "screenshots/erro_0223266_55_2021_8_26_0500_20251001_194944.png",
+tjsp_worker_1  |   "duration_seconds": 7.33,
+tjsp_worker_1  |   "duration_hms": "0m07s"
+tjsp_worker_1  | }
+tjsp_worker_1  | 
+tjsp_worker_1  | --- Fim do Output ---
+tjsp_worker_1  | 
+tjsp_worker_1  | 
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Processando item 2/3 do Job ID=28: Processo 0179487-50.2021.8.26.0500
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Executando comando: /usr/local/bin/python crawler_full.py --doc 0179487-50.2021.8.26.0500 --abrir-autos --baixar-pdf --turbo-download --download-dir /app/downloads/06495530803
+tjsp_worker_1  | 
+tjsp_worker_1  | --- Output do Crawler ---
+tjsp_worker_1  | [INFO] Conectando ao Selenium Grid: http://selenium-chrome:4444
+tjsp_worker_1  | [INFO] ✅ Conectado ao Selenium Grid com sucesso!
+tjsp_worker_1  | {
+tjsp_worker_1  |   "documento": null,
+tjsp_worker_1  |   "processo": "0179487-50.2021.8.26.0500",
+tjsp_worker_1  |   "ok": false,
+tjsp_worker_1  |   "has_precatorio": false,
+tjsp_worker_1  |   "found_process_numbers": [],
+tjsp_worker_1  |   "results": [],
+tjsp_worker_1  |   "error": "RuntimeError: CAS: autenticação necessária e não realizada.\nTraceback (most recent call last):\n  File \"/app/crawler_full.py\", line 1268, in go_and_extract\n    _maybe_cas_login(wait, driver, cert_subject_cn, user=cas_usuario, pwd=cas_senha, payload=payload)\n  File \"/app/crawler_full.py\", line 300, in _maybe_cas_login\n    raise RuntimeError(\"CAS: autenticação necessária e não realizada.\")\nRuntimeError: CAS: autenticação necessária e não realizada.\n",
+tjsp_worker_1  |   "downloaded_files": [],
+tjsp_worker_1  |   "started_at": "2025-10-01 19:49:44",
+tjsp_worker_1  |   "finished_at": "2025-10-01 19:49:51",
+tjsp_worker_1  |   "last_url": "https://esaj.tjsp.jus.br/sajcas/login?service=https%3A%2F%2Fesaj.tjsp.jus.br%2Fcpopg%2Fj_spring_cas_security_check",
+tjsp_worker_1  |   "error_html_path": "screenshots/erro_0179487_50_2021_8_26_0500_20251001_194950.html",
+tjsp_worker_1  |   "error_screenshot_path": "screenshots/erro_0179487_50_2021_8_26_0500_20251001_194950.png",
+tjsp_worker_1  |   "duration_seconds": 6.67,
+tjsp_worker_1  |   "duration_hms": "0m07s"
+tjsp_worker_1  | }
+tjsp_worker_1  | 
+tjsp_worker_1  | --- Fim do Output ---
+tjsp_worker_1  | 
+tjsp_worker_1  | 
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Processando item 3/3 do Job ID=28: Processo 7007473-24.2010.8.26.0500
+tjsp_worker_1  | ================================================================================
+tjsp_worker_1  | Executando comando: /usr/local/bin/python crawler_full.py --doc 7007473-24.2010.8.26.0500 --abrir-autos --baixar-pdf --turbo-download --download-dir /app/downloads/06495530803
+tjsp_worker_1  | 
+tjsp_worker_1  | --- Output do Crawler ---
+tjsp_worker_1  | [INFO] Conectando ao Selenium Grid: http://selenium-chrome:4444
+tjsp_worker_1  | [INFO] ✅ Conectado ao Selenium Grid com sucesso!
+tjsp_worker_1  | {
+tjsp_worker_1  |   "documento": null,
+tjsp_worker_1  |   "processo": "7007473-24.2010.8.26.0500",
+tjsp_worker_1  |   "ok": false,
+tjsp_worker_1  |   "has_precatorio": false,
+tjsp_worker_1  |   "found_process_numbers": [],
+tjsp_worker_1  |   "results": [],
+tjsp_worker_1  |   "error": "RuntimeError: CAS: autenticação necessária e não realizada.\nTraceback (most recent call last):\n  File \"/app/crawler_full.py\", line 1268, in go_and_extract\n    _maybe_cas_login(wait, driver, cert_subject_cn, user=cas_usuario, pwd=cas_senha, payload=payload)\n  File \"/app/crawler_full.py\", line 300, in _maybe_cas_login\n    raise RuntimeError(\"CAS: autenticação necessária e não realizada.\")\nRuntimeError: CAS: autenticação necessária e não realizada.\n",
+tjsp_worker_1  |   "downloaded_files": [],
+tjsp_worker_1  |   "started_at": "2025-10-01 19:49:51",
+tjsp_worker_1  |   "finished_at": "2025-10-01 19:49:58",
+tjsp_worker_1  |   "last_url": "https://esaj.tjsp.jus.br/sajcas/login?service=https%3A%2F%2Fesaj.tjsp.jus.br%2Fcpopg%2Fj_spring_cas_security_check",
+tjsp_worker_1  |   "error_html_path": "screenshots/erro_7007473_24_2010_8_26_0500_20251001_194957.html",
+tjsp_worker_1  |   "error_screenshot_path": "screenshots/erro_7007473_24_2010_8_26_0500_20251001_194957.png",
+tjsp_worker_1  |   "duration_seconds": 6.658,
+tjsp_worker_1  |   "duration_hms": "0m07s"
+tjsp_worker_1  | }
+tjsp_worker_1  | 
+tjsp_worker_1  | --- Fim do Output ---
+tjsp_worker_1  | 
+tjsp_worker_1  | 
+tjsp_worker_1  | Atualizando status para 'processado = TRUE' para o ID: 28
+tjsp_worker_1  | [SUCESSO] Status atualizado para o ID 28.
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1 exited with code 0
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1 exited with code 0
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1 exited with code 0
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1 exited with code 0
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1 exited with code 0
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1 exited with code 0
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1 exited with code 0
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1 exited with code 0
+tjsp_worker_1  | Conectando ao banco de dados PostgreSQL...
+tjsp_worker_1  | Executando a query para buscar o próximo item da fila...
+tjsp_worker_1  | Conexão com o banco de dados fechada.
+tjsp_worker_1  | Nenhum precatório novo para processar encontrado. Encerrando o worker.
+tjsp_worker_1 exited with code 0
