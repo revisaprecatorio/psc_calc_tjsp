@@ -144,6 +144,8 @@ def _build_chrome(attach, user_data_dir, cert_issuer_cn, cert_subject_cn,
         if headless:
             try: opts.add_argument("--headless=new")
             except Exception: opts.add_argument("--headless")
+        
+        # CORRIGIDO: Flags específicas para resolver problema de user-data-dir no Docker
         opts.add_argument("--disable-gpu")
         opts.add_argument("--disable-dev-shm-usage")
         opts.add_argument("--no-sandbox")
@@ -151,6 +153,21 @@ def _build_chrome(attach, user_data_dir, cert_issuer_cn, cert_subject_cn,
         opts.add_argument("--no-default-browser-check")
         opts.add_argument("--window-size=1920,1080")
         opts.add_argument("--disable-blink-features=AutomationControlled")
+        
+        # NOVO: Flags adicionais para forçar Chrome a não usar cache/perfil persistente
+        opts.add_argument("--disable-extensions")
+        opts.add_argument("--disable-plugins")
+        opts.add_argument("--disable-background-networking")
+        opts.add_argument("--disable-sync")
+        opts.add_argument("--disable-translate")
+        opts.add_argument("--metrics-recording-only")
+        opts.add_argument("--disable-default-apps")
+        opts.add_argument("--mute-audio")
+        opts.add_argument("--no-first-run")
+        opts.add_argument("--safebrowsing-disable-auto-update")
+        opts.add_argument("--disable-client-side-phishing-detection")
+        opts.add_argument("--disable-component-update")
+        opts.add_argument("--disable-domain-reliability")
 
         # Preferências de download (FORÇA baixar PDF)
         Path(download_dir).mkdir(parents=True, exist_ok=True)
