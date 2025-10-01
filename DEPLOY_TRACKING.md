@@ -142,6 +142,7 @@ Documentação completa com:
 **Commits:** 
 - `136de15` → Documentação de tracking inicial
 - `16601a4` → Ferramentas de gerenciamento da fila
+- `734c4ae` → Atualização de documentação e correção de comandos
 
 **Status:** ✅ Implementado
 
@@ -154,6 +155,66 @@ python manage_queue.py --status
 # Do host (sem entrar no container)
 docker exec tjsp_worker_1 python manage_queue.py --status
 ```
+
+---
+
+### **5. Deploy Final: Integração Completa**
+**Data:** 2025-10-01 01:39  
+**Objetivo:**
+Deploy completo com todas as correções e ferramentas integradas.
+
+**Mudanças Consolidadas:**
+1. ✅ Query SQL corrigida (boolean ao invés de string)
+2. ✅ Ferramentas de gerenciamento da fila implementadas
+3. ✅ Dependência `tabulate` adicionada ao requirements.txt
+4. ✅ Documentação completa (DEPLOY_TRACKING.md + QUEUE_MANAGEMENT.md)
+5. ✅ Comandos Docker corrigidos (docker compose sem hífen)
+
+**Motivo do Rebuild:**
+- Novo pacote Python (`tabulate`) precisa ser instalado
+- Código do `orchestrator_subprocess.py` atualizado
+- Novos scripts (`manage_queue.py`, `reset_queue.sql`) precisam ser copiados
+
+**Procedimento de Deploy:**
+
+```bash
+# 1. Navegue até o diretório
+cd /opt/crawler_tjsp
+
+# 2. Pare o container atual
+docker compose down
+
+# 3. Atualize o código do repositório
+git pull origin main
+
+# 4. Reconstrua a imagem (para instalar o tabulate e copiar novos arquivos)
+docker compose build
+
+# 5. Suba o container novamente
+docker compose up -d
+
+# 6. Verifique se está rodando
+docker compose ps
+
+# 7. Teste o script de gerenciamento
+docker exec tjsp_worker_1 python manage_queue.py --status
+
+# 8. Se não houver jobs pendentes, resete alguns para teste
+docker exec tjsp_worker_1 python manage_queue.py --reset-last 5
+
+# 9. Monitore os logs para ver o processamento
+docker compose logs -f worker
+```
+
+**Validações Pós-Deploy:**
+- [ ] Container iniciou sem erros
+- [ ] Script `manage_queue.py` executa corretamente
+- [ ] Conexão com banco de dados estabelecida
+- [ ] Query retorna jobs pendentes (se houver)
+- [ ] Worker processa jobs da fila
+- [ ] Status é atualizado no banco após processamento
+
+**Status:** 🟡 Aguardando execução
 
 ---
 
