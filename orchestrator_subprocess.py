@@ -148,6 +148,13 @@ def main():
                     command, capture_output=True, text=True, check=True,
                     encoding=sys.stdout.encoding, errors='replace'
                 )
+                
+                # ADICIONADO: Imprimir stdout do crawler para debug
+                if result.stdout:
+                    print("\n--- Output do Crawler ---")
+                    print(result.stdout)
+                    print("--- Fim do Output ---\n")
+                
                 # ... (lógica de processamento do resultado JSON) ...
 
             except subprocess.CalledProcessError as e:
@@ -155,6 +162,9 @@ def main():
                 print(f"ERRO CRÍTICO: O script crawler_full.py falhou para o processo {processo_cnj}.")
                 print("\n--- Saída de Erro (stderr) ---")
                 print(e.stderr)
+                if e.stdout:
+                    print("\n--- Saída Padrão (stdout) ---")
+                    print(e.stdout)
                 print("*"*80)
                 todos_sucesso = False # Marca que houve uma falha
             
