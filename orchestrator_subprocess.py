@@ -16,6 +16,12 @@ DB_CONFIG = {
     "password": os.getenv("DB_PASSWORD"),
 }
 
+# Configurações de certificado digital
+CERT_SUBJECT_CN = os.getenv("CERT_SUBJECT_CN", "")
+CERT_ISSUER_CN = os.getenv("CERT_ISSUER_CN", "")
+CAS_USUARIO = os.getenv("CAS_USUARIO", "")
+CAS_SENHA = os.getenv("CAS_SENHA", "")
+
 # --- ALTERADO: A função agora busca apenas itens não processados e retorna o ID ---
 def fetch_precatorios_from_db():
     """
@@ -153,6 +159,18 @@ def main():
                 "--abrir-autos", "--baixar-pdf", "--turbo-download",
                 "--download-dir", caminho_download,
             ]
+            
+            # Adicionar parâmetros de certificado se configurados
+            if CERT_SUBJECT_CN:
+                command.extend(["--cert-subject-cn", CERT_SUBJECT_CN])
+            if CERT_ISSUER_CN:
+                command.extend(["--cert-issuer-cn", CERT_ISSUER_CN])
+            
+            # Adicionar credenciais CAS se configuradas (fallback)
+            if CAS_USUARIO:
+                command.extend(["--cas-usuario", CAS_USUARIO])
+            if CAS_SENHA:
+                command.extend(["--cas-senha", CAS_SENHA])
 
             try:
                 print(f"Executando comando: {' '.join(command)}")
