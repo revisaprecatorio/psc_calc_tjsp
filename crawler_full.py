@@ -143,11 +143,12 @@ def _build_chrome(attach, user_data_dir, cert_issuer_cn, cert_subject_cn,
         
         # Headless: FALSE quando usar Xvfb (precisa de display virtual)
         # TRUE apenas se for Grid ou desenvolvimento local
+        _headless = headless
         if use_local_chromedriver:
             # Xvfb: NÃO usar headless (precisa do display virtual)
-            headless = False
+            _headless = False
         
-        if headless:
+        if _headless:
             try: opts.add_argument("--headless=new")
             except Exception: opts.add_argument("--headless")
         
