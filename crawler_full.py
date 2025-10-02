@@ -133,13 +133,20 @@ def _build_chrome(attach, user_data_dir, cert_issuer_cn, cert_subject_cn,
     """
     import os as _os
     
-    # Verifica se deve usar Selenium Grid
+    # Verifica se deve usar Selenium Grid ou ChromeDriver local
     selenium_remote_url = _os.environ.get("SELENIUM_REMOTE_URL")
+    # Se não tiver SELENIUM_REMOTE_URL, usa ChromeDriver local (Xvfb)
+    use_local_chromedriver = not selenium_remote_url
     
     def make_options():
         opts = Options()
         
-        # Headless (sempre True no Grid)
+        # Headless: FALSE quando usar Xvfb (precisa de display virtual)
+        # TRUE apenas se for Grid ou desenvolvimento local
+        if use_local_chromedriver:
+            # Xvfb: NÃO usar headless (precisa do display virtual)
+            headless = False
+        
         if headless:
             try: opts.add_argument("--headless=new")
             except Exception: opts.add_argument("--headless")
@@ -190,6 +197,25 @@ def _build_chrome(attach, user_data_dir, cert_issuer_cn, cert_subject_cn,
         except Exception as e:
             print(f"[ERROR] ❌ Falha ao conectar no Selenium Grid: {e}")
             print("[INFO] Tentando Chrome local como fallback...")
+    
+    # NOVO: ChromeDriver local com Xvfb (para Web Signer)
+    # Se não tiver SELENIUM_REMOTE_URL, tenta conectar ao ChromeDriver local
+    if use_local_chromedriver:
+        chromedriver_url = "http://localhost:4444"
+        print(f"[INFO] Conectando ao ChromeDriver local (Xvfb): {chromedriver_url}")
+        try:
+            from selenium.webdriver import Remote
+            driver = Remote(
+                command_executor=chromedriver_url,
+                options=opts
+            )
+            driver.set_page_load_timeout(60)
+            print("[INFO] ✅ Conectado ao ChromeDriver local com sucesso!")
+            print("[INFO] Chrome rodando no Xvfb com Web Signer habilitado")
+            return driver
+        except Exception as e:
+            print(f"[ERROR] ❌ Falha ao conectar no ChromeDriver local: {e}")
+            print("[INFO] Tentando Chrome local direto como fallback...")
     
     # Fallback: Chrome local (para desenvolvimento)
     # Tenta anexar via debuggerAddress primeiro

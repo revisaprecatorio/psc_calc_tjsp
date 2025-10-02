@@ -11,29 +11,140 @@
 
 ## 🎯 STATUS ATUAL
 
-**Última Atualização:** 2025-10-01 20:30:00  
-**Status:** ⏸️ **AGUARDANDO VALIDAÇÃO DE CREDENCIAIS**
+**Última Atualização:** 2025-10-02 15:30:00  
+**Status:** 🔧 **PLANO XVFB + WEB SIGNER DEFINIDO**
 
 **Resumo:**
-- ✅ Selenium Grid funcionando perfeitamente
-- ✅ Código modificado para priorizar login CPF/senha
-- ✅ Sistema de autenticação testado manualmente
-- ❌ **BLOQUEIO:** Credenciais do certificado (CPF 517.648.902-30) inválidas
-- ⏸️ **Aguardando:** Validação com detentor do certificado
+- ❌ Login CPF/senha DESCARTADO (2FA + emails randômicos + áreas restritas)
+- ✅ Certificado é a ÚNICA opção viável
+- ✅ Plano completo de implementação criado
+- ✅ Código modificado para suportar ChromeDriver local
+- 🔧 **Próximo:** Implementar Xvfb + Web Signer na VPS
 
-**Descoberta Importante:**
-- Site e-SAJ aceita login com CPF/senha (testado com sucesso)
-- Problema não é técnico, é de credenciais incorretas
-- Necessário validar: CPF cadastrado + senha correta + perfil advogado
+**Decisão Estratégica:**
+- Abandonar Selenium Grid Docker (incompatível com Web Signer)
+- Implementar Xvfb + Chrome no host Ubuntu
+- Manter worker Python em Docker
+- Tempo estimado: 6-8 horas de implementação
 
 ---
 
 ## 📝 HISTÓRICO DE MUDANÇAS
 
+### **[16] DECISÃO: Implementar Xvfb + Web Signer**
+**Timestamp:** 2025-10-02 15:30:00  
+**Commits:** `[a criar]`  
+**Status:** 🔧 **PLANO DEFINIDO**
+
+#### **Contexto:**
+
+Após análise profunda, foi decidido **DESCARTAR** a opção de login CPF/senha e **IMPLEMENTAR** solução com Xvfb + Web Signer para usar certificado digital.
+
+**Por que CPF/Senha NÃO é viável:**
+
+1. ❌ **2FA Obrigatório:**
+   - Código enviado por email a cada login
+   - Impossível automatizar sem acesso constante ao email
+
+2. ❌ **Emails Randômicos de Validação:**
+   - Sistema envia emails de validação imprevisíveis
+   - Não há padrão ou previsibilidade
+
+3. ❌ **Áreas Restritas sem Certificado:**
+   - Tribunal de Justiça tem controle de acesso rígido
+   - Informações confidenciais exigem certificado
+   - Algumas áreas são inacessíveis sem certificado
+
+4. ✅ **Certificado Funciona Perfeitamente:**
+   - Testado no macOS: apenas certificado, sem usuário/senha
+   - Acesso completo ao sistema
+   - Web Signer intercepta e autentica automaticamente
+
+**Decisão Técnica:**
+
+Implementar **Xvfb + Chrome + Web Signer no host Ubuntu**, abandonando Selenium Grid Docker.
+
+**Nova Arquitetura:**
+
+```
+┌──────────────────────────────────────────────────────┐
+│ VPS Ubuntu (srv987902)                               │
+│                                                      │
+│ ┌──────────────────────────────────────────────────┐│
+│ │ Xvfb (Display Virtual :99)                       ││
+│ │ - Framebuffer em memória                         ││
+│ │ - Serviço systemd                                ││
+│ └──────────────────────────────────────────────────┘│
+│                        ↓                             │
+│ ┌──────────────────────────────────────────────────┐│
+│ │ Chrome (Host Ubuntu)                             ││
+│ │ - Modo não-headless no Xvfb                      ││
+│ │ - Web Signer instalado                           ││
+│ │ - Certificado A1 importado                       ││
+│ └──────────────────────────────────────────────────┘│
+│                        ↓                             │
+│ ┌──────────────────────────────────────────────────┐│
+│ │ ChromeDriver (Porta 4444)                        ││
+│ │ - Controla Chrome local                          ││
+│ │ - Serviço systemd                                ││
+│ └──────────────────────────────────────────────────┘│
+│                        ↓                             │
+│ ┌──────────────────────────────────────────────────┐│
+│ │ Worker Python (Docker)                           ││
+│ │ - Conecta ao ChromeDriver local                  ││
+│ │ - network_mode: host                             ││
+│ └──────────────────────────────────────────────────┘│
+└──────────────────────────────────────────────────────┘
+```
+
+**Modificações no Código:**
+
+Arquivo `crawler_full.py`:
+- Adicionado suporte para ChromeDriver local
+- Detecta ausência de `SELENIUM_REMOTE_URL`
+- Conecta a `http://localhost:4444` (ChromeDriver)
+- Desabilita headless quando usar Xvfb
+- Mantém compatibilidade com Grid (fallback)
+
+**Documentação Criada:**
+
+1. **PLANO_XVFB_WEBSIGNER.md** (NOVO):
+   - Plano completo de implementação
+   - 11 fases detalhadas
+   - Scripts prontos para copiar/colar
+   - Troubleshooting completo
+   - Checklist de validação
+   - Tempo estimado: 6-8 horas
+
+2. **log_deploy_25.txt**:
+   - Análise completa das opções
+   - Justificativa da decisão
+   - Comparação de alternativas
+
+**Próximos Passos:**
+
+1. 🔧 Implementar Xvfb na VPS (Fase 1-5)
+2. 🔧 Instalar Chrome + Web Signer (Fase 2-3)
+3. 🔧 Configurar certificado A1 (Fase 4)
+4. 🔧 Configurar ChromeDriver (Fase 6)
+5. 🔧 Modificar docker-compose.yml (Fase 8)
+6. 🧪 Testar autenticação (Fase 11)
+7. ✅ Sistema operacional!
+
+**Tempo Estimado:** 6-8 horas de implementação
+
+**Riscos Mitigados:**
+- ✅ Solução comprovada (Xvfb é padrão da indústria)
+- ✅ Web Signer funciona em Ubuntu
+- ✅ Certificado A1 importável via NSS
+- ✅ ChromeDriver compatível com Selenium
+
+---
+
 ### **[15] BLOQUEIO: Problema de Credenciais Identificado**
 **Timestamp:** 2025-10-01 20:30:00  
-**Commit:** `09505e0`  
-**Status:** ⏸️ **AGUARDANDO VALIDAÇÃO**
+**Commit:** `09505e0`, `75e7bd9`  
+**Status:** ✅ **RESOLVIDO - CPF/Senha descartado**
 
 #### **Descoberta:**
 
