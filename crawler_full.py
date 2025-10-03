@@ -281,14 +281,7 @@ def _maybe_cas_login(wait, driver, cert_subject_cn, user=None, pwd=None, payload
         debug(payload, "CAS: não precisou logar (já dentro).")
         return
     
-    # MODIFICAÇÃO: Tenta CPF/senha PRIMEIRO (certificado requer Web Signer)
-    if user and pwd:
-        debug(payload, "CAS: tentando login com CPF/CNPJ…")
-        if _cas_login_with_password(wait, driver, user, pwd):
-            debug(payload, "CAS: login CPF/CNPJ OK."); return
-        debug(payload, "CAS: falha no login CPF/CNPJ.")
-    
-    # Fallback: tenta certificado (provavelmente falhará sem Web Signer)
+    # PRIORIDADE 1: Tenta certificado digital (Web Signer instalado e funcionando)
     try:
         debug(payload, "CAS: tentando aba CERTIFICADO…")
         _switch_to_tab(wait, (By.ID, "linkAbaCertificado"))
@@ -329,8 +322,15 @@ def _maybe_cas_login(wait, driver, cert_subject_cn, user=None, pwd=None, payload
         if not clicked: raise RuntimeError("CAS: botão 'Entrar' (certificado) não encontrado.")
         wait.until(EC.url_contains("/cpopg/"))
         debug(payload, "CAS: certificado OK."); return
-    except Exception:
-        debug(payload, "CAS: falha no certificado.")
+    except Exception as e:
+        debug(payload, f"CAS: falha no certificado - {str(e)}")
+    
+    # FALLBACK: Tenta CPF/senha (caso certificado falhe)
+    if user and pwd:
+        debug(payload, "CAS: tentando login com CPF/CNPJ (fallback)…")
+        if _cas_login_with_password(wait, driver, user, pwd):
+            debug(payload, "CAS: login CPF/CNPJ OK."); return
+        debug(payload, "CAS: falha no login CPF/CNPJ.")
     
     raise RuntimeError("CAS: autenticação necessária e não realizada.")
 
