@@ -1,32 +1,35 @@
 # 📋 Instruções: Login Manual no Google via RDP
 
 ## 🎯 Objetivo
-Fazer login no Google manualmente via RDP e salvar o perfil para uso posterior pelo Selenium.
+Fazer login no Google manualmente via RDP usando o usuário `crawler` e salvar o perfil para uso posterior pelo Selenium.
+
+## ⚠️ IMPORTANTE
+- ChromeDriver e Xvfb agora rodam como usuário `crawler` (não mais como root)
+- O perfil do Chrome usado é: `/home/crawler/.config/google-chrome`
+- Você faz login via RDP como `crawler` e usa o Chrome normalmente
 
 ---
 
 ## 📝 PASSO A PASSO
 
+### **PASSO 0: Reconfigurar Serviços (Execute UMA VEZ)**
+```bash
+cd /opt/crawler_tjsp
+chmod +x reconfigure_as_crawler.sh
+./reconfigure_as_crawler.sh
+```
+
 ### **PASSO 1: Conectar via RDP**
 1. Abra o RDP e conecte ao servidor
-2. Faça login como usuário `root`
+2. Faça login como usuário `crawler` (como você já faz!)
 
-### **PASSO 2: Abrir Chrome com o Perfil Correto**
-Execute no terminal do servidor:
+### **PASSO 2: Abrir Chrome Normalmente**
+Via RDP, simplesmente:
+1. Abra o Chrome (ícone na área de trabalho ou menu)
+2. **OU** execute no terminal:
 
 ```bash
-# Parar ChromeDriver temporariamente
-systemctl stop chromedriver
-
-# Abrir Chrome com o perfil que o Selenium vai usar
-DISPLAY=:99 google-chrome \
-  --user-data-dir=/opt/crawler_tjsp/chrome_profile_revisa \
-  --no-sandbox \
-  --disable-dev-shm-usage \
-  https://www.google.com &
-
-# Aguardar Chrome abrir (5 segundos)
-sleep 5
+google-chrome https://www.google.com &
 ```
 
 ### **PASSO 3: Fazer Login no Google**
@@ -37,23 +40,17 @@ sleep 5
 5. Complete qualquer verificação de segurança se necessário
 6. **IMPORTANTE:** Marque "Manter conectado" se aparecer
 
-### **PASSO 4: Verificar Login**
+### **PASSO 3: Verificar Login**
 1. Vá para: https://myaccount.google.com
 2. Confirme que está logado
 3. Vá para: chrome://extensions/
 4. Ative o "Developer mode" (toggle no canto superior direito)
 
-### **PASSO 5: Fechar Chrome**
-```bash
-# Fechar Chrome
-pkill -f "google-chrome.*chrome_profile_revisa"
+### **PASSO 4: Fechar Chrome**
+Simplesmente feche o Chrome normalmente (X na janela)
 
-# Reiniciar ChromeDriver
-systemctl start chromedriver
-```
-
-### **PASSO 6: Testar com Selenium**
-Execute o script de verificação:
+### **PASSO 5: Testar com Selenium**
+Execute no terminal (via SSH ou RDP):
 
 ```bash
 cd /opt/crawler_tjsp

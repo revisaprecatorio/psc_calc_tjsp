@@ -20,8 +20,8 @@ def verify_google_login():
     print("VERIFICAÇÃO DE LOGIN NO GOOGLE")
     print("=" * 80)
     
-    # Usar o mesmo perfil
-    profile_dir = "/opt/crawler_tjsp/chrome_profile_revisa"
+    # Usar o perfil do usuário crawler (que tem acesso via RDP)
+    profile_dir = "/home/crawler/.config/google-chrome"
     
     opts = Options()
     opts.add_argument("--no-sandbox")
