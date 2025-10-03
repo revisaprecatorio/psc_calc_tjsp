@@ -5,37 +5,46 @@
 **Repositório:** https://github.com/revisaprecatorio/crawler_tjsp
 
 > **NOTA:** Este documento está organizado em **ordem cronológica reversa** (mais recente primeiro).
-> Cada entrada inclui timestamp completo para rastreabilidade.
 
 ---
 
 ## 🎯 STATUS ATUAL
 
-**Última Atualização:** 2025-10-03 04:59:00  
-**Status:** 🔴 **BLOQUEADO - LOGIN NO GOOGLE FALHOU**
+**Última Atualização:** 2025-10-03 19:37:00  
+**Status:** 🟡 **EM TESTE - Solução de Perfil Temporário**
 
 **Resumo Executivo:**
-- ✅ Xvfb instalado e rodando (display :99)
-- ✅ ChromeDriver instalado e rodando (porta 4444)
-- ✅ Certificado A1 importado no NSS database do root
-- ✅ Web Signer instalado e manifesto corrigido
-- ❌ **BLOQUEIO CRÍTICO:** Login no Google FALHOU (botão "Sign in" não encontrado)
-- ❌ **SEM LOGIN:** Developer Mode NÃO foi ativado (requer login)
-- ❌ **SEM LOGIN:** Extensão NÃO foi instalada (requer login)
-- ⏸️ **PAUSADO:** Aguardando resolver login no Google para prosseguir
+- ✅ Xvfb instalado e rodando (display :99) como usuário `crawler`
+- ✅ ChromeDriver instalado e rodando (porta 4444) como usuário `crawler`
+- ✅ Certificado A1 importado e funcionando no Perfil do RDP
+- ✅ Web Signer instalado e extensão configurada no Perfil do RDP
+- ✅ Google logado no Perfil do RDP (sem CAPTCHAs)
+- 🔄 **EM TESTE:** Copiar extensão Web Signer para Perfil temporário
+- 🔄 **TESTANDO:** Selenium com Perfil temporário + extensão copiada
 
 **Arquitetura Implementada:**
 ```
-VPS Ubuntu → Xvfb (:99) → Chrome + Web Signer + ChromeDriver (4444) → Worker Docker (network: host)
+Usuário crawler:
+  ├── RDP (Chrome aberto, Google logado, Web Signer configurado)
+  │   └── Perfil: /home/crawler/.config/google-chrome
+  ├── Xvfb (DISPLAY=:99)
+  ├── ChromeDriver (porta 4444)
+  └── Selenium
+      └── Perfil temporário: /tmp/chrome_profile_test
+          └── Extensão Web Signer (copiada do Perfil RDP)
 ```
 
-**Próximos Passos (Quando Retornar):**
-1. ❌ **FAZER LOGIN NO GOOGLE** (revisaprecatorio@gmail.com / R3v1s@2025) - BLOQUEIO ATUAL
-2. ⏸️ Ativar Developer Mode (DEPENDE DO PASSO 1)
-3. ⏸️ Instalar extensão Web Signer via Chrome Web Store (DEPENDE DO PASSO 1 e 2)
-4. ⏸️ Verificar instalação (chrome://extensions/ + ícone de extensões)
-5. ⏸️ Configurar extensão (importar certificado)
-6. ⏸️ Testar login no e-SAJ com certificado digital
+**Solução Encontrada:**
+- ✅ **Evitar conflito de Perfil:** Chrome do RDP continua aberto
+- ✅ **Evitar CAPTCHAs:** Não fecha Chrome, não perde sessão Google
+- ✅ **Extensão disponível:** Copiada do Perfil RDP para temporário
+- ✅ **Certificado acessível:** Web Signer no Perfil temporário
+
+**Próximos Passos (Em Execução):**
+1. 🔄 Copiar extensão Web Signer para Perfil temporário
+2. 🔄 Testar detecção de certificado via Selenium
+3. ⏸️ Se funcionar: Integrar ao crawler principal
+4. ⏸️ Testar busca de processos completa
 
 **Credenciais:**
 - Google: revisaprecatorio@gmail.com / R3v1s@2025
@@ -44,6 +53,41 @@ VPS Ubuntu → Xvfb (:99) → Chrome + Web Signer + ChromeDriver (4444) → Work
 ---
 
 ## 📝 HISTÓRICO DE MUDANÇAS
+
+### **[27] Solução de Perfil Temporário - Evitando CAPTCHAs**
+**Timestamp:** 2025-10-03 19:37:00  
+**Status:** 🟡 **EM TESTE - Copiando Extensão para Perfil Temporário**
+
+#### **Problema Identificado:**
+- Chrome do RDP usa perfil: `/home/crawler/.config/google-chrome`
+- Selenium não pode usar o mesmo perfil (conflito)
+- Perfil temporário não tinha extensão Web Signer
+- Google detecta automação e bloqueia login (CAPTCHAs)
+
+#### **Solução Implementada:**
+1. **Manter Chrome do RDP aberto** (não perder sessão Google)
+2. **Criar perfil temporário** para Selenium (`/tmp/chrome_profile_test`)
+3. **Copiar extensão Web Signer** do perfil RDP para temporário
+4. **Selenium usa perfil temporário** com extensão copiada
+
+#### **Scripts Criados:**
+- `copy_extension_to_temp.sh` - Copia extensão Web Signer
+- `test_with_chromedriver.py` - Testa com perfil temporário
+- `test_with_open_browser.py` - Testa com remote debugging (alternativa)
+
+#### **Vantagens da Solução:**
+- ✅ Não fecha Chrome do RDP
+- ✅ Não perde sessão do Google
+- ✅ Não precisa resolver CAPTCHAs
+- ✅ Extensão Web Signer disponível
+- ✅ Certificado acessível via Selenium
+
+#### **Status Atual:**
+- 🔄 Executando cópia da extensão
+- 🔄 Testando detecção de certificado
+- ⏸️ Aguardando resultado do teste
+
+---
 
 ### **[26] Infraestrutura Completa - BLOQUEADO no Login Google**
 **Timestamp:** 2025-10-03 04:59:00  
