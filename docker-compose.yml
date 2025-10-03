@@ -9,30 +9,29 @@ services:
     # Define um nome para o contêiner em execução
     container_name: tjsp_worker_1
     
-    # MODIFICADO: Usa rede host para acessar ChromeDriver local
+    # IMPORTANTE: Usa rede host para acessar ChromeDriver local (porta 4444)
     network_mode: host
     
-    # Adicionado para carregar todas as variáveis do arquivo .env
-    # Esta é a melhor forma de gerenciar segredos e configurações
+    # Carrega todas as variáveis do arquivo .env
     env_file:
       - .env
     
-    # MODIFICADO: Conecta ao ChromeDriver local (host) via localhost
+    # Variáveis de ambiente específicas para Xvfb + ChromeDriver
     environment:
+      # ChromeDriver local rodando no host (não mais Selenium Grid)
       - SELENIUM_REMOTE_URL=http://localhost:4444
+      # Display virtual do Xvfb
       - DISPLAY=:99
 
-    # Mapeia pastas locais para dentro do contêiner para persistir dados
+    # Mapeia pastas locais para dentro do contêiner
     volumes:
       - ./downloads:/app/downloads
       - ./screenshots:/app/screenshots
-      # Mantido o volume de certificados
       - ./certs:/app/certs
-      # NOVO: Monta NSS database do host para permitir uso de certificados
+      # Monta NSS database do host (certificados digitais)
       - /root/.pki/nssdb:/root/.pki/nssdb:ro
 
-    # Política de reinício: o contêiner sempre será reiniciado
-    # a menos que você o pare manualmente. Perfeito para um worker.
+    # Reinicia automaticamente em caso de falha
     restart: unless-stopped
 
   # COMENTADO: Não usamos mais Selenium Grid em container
