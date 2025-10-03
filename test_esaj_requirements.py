@@ -22,7 +22,12 @@ def test_esaj_requirements():
     opts.add_argument("--no-sandbox")
     opts.add_argument("--disable-dev-shm-usage")
     
-    driver = webdriver.Chrome(options=opts)
+    # Usar ChromeDriver remoto (porta 4444)
+    from selenium.webdriver import Remote
+    chromedriver_url = "http://localhost:4444"
+    
+    print(f"\n[0] Conectando ao ChromeDriver: {chromedriver_url}")
+    driver = Remote(command_executor=chromedriver_url, options=opts)
     
     try:
         # 1. Acessar e-SAJ
