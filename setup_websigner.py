@@ -48,7 +48,7 @@ def setup_websigner():
         time.sleep(3)
         
         # Screenshot 1: Página inicial
-        screenshot_path = "/app/screenshots/setup_step1_inicial.png"
+        screenshot_path = "/opt/crawler_tjsp/screenshots/setup_step1_inicial.png"
         driver.save_screenshot(screenshot_path)
         print(f"✅ Screenshot salvo: {screenshot_path}")
         
@@ -63,7 +63,7 @@ def setup_websigner():
             time.sleep(2)
             
             # Screenshot 2: Aba certificado
-            screenshot_path = "/app/screenshots/setup_step2_aba_certificado.png"
+            screenshot_path = "/opt/crawler_tjsp/screenshots/setup_step2_aba_certificado.png"
             driver.save_screenshot(screenshot_path)
             print(f"✅ Screenshot salvo: {screenshot_path}")
         except Exception as e:
@@ -74,7 +74,7 @@ def setup_websigner():
         time.sleep(2)
         
         # Screenshot 3: Estado atual
-        screenshot_path = "/app/screenshots/setup_step3_popup.png"
+        screenshot_path = "/opt/crawler_tjsp/screenshots/setup_step3_popup.png"
         driver.save_screenshot(screenshot_path)
         print(f"✅ Screenshot salvo: {screenshot_path}")
         
@@ -96,7 +96,7 @@ def setup_websigner():
                 print(f"✅ Botão encontrado com seletor: {selector}")
                 
                 # Screenshot 4: Antes de clicar
-                screenshot_path = "/app/screenshots/setup_step4_antes_clicar.png"
+                screenshot_path = "/opt/crawler_tjsp/screenshots/setup_step4_antes_clicar.png"
                 driver.save_screenshot(screenshot_path)
                 print(f"✅ Screenshot salvo: {screenshot_path}")
                 
@@ -107,7 +107,7 @@ def setup_websigner():
                 time.sleep(3)
                 
                 # Screenshot 5: Depois de clicar
-                screenshot_path = "/app/screenshots/setup_step5_depois_clicar.png"
+                screenshot_path = "/opt/crawler_tjsp/screenshots/setup_step5_depois_clicar.png"
                 driver.save_screenshot(screenshot_path)
                 print(f"✅ Screenshot salvo: {screenshot_path}")
                 
@@ -122,15 +122,15 @@ def setup_websigner():
         print("\n[7] Aguardando 5 segundos...")
         time.sleep(5)
         
-        screenshot_path = "/app/screenshots/setup_step6_final.png"
+        screenshot_path = "/opt/crawler_tjsp/screenshots/setup_step6_final.png"
         driver.save_screenshot(screenshot_path)
         print(f"✅ Screenshot final salvo: {screenshot_path}")
         
         print("\n" + "=" * 80)
         print("SETUP CONCLUÍDO!")
         print("=" * 80)
-        print("\nScreenshots salvos em: /app/screenshots/setup_step*.png")
-        print("No host: /opt/crawler_tjsp/screenshots/setup_step*.png")
+        print("\nScreenshots salvos em: /opt/crawler_tjsp/screenshots/setup_step*.png")
+        print("Copie para /home/crawler/ para visualizar via RDP")
         print("\nPróximos passos:")
         print("1. Copie os screenshots para /home/crawler/")
         print("2. Abra via RDP e analise cada passo")
