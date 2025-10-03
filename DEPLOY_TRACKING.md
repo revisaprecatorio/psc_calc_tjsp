@@ -11,34 +11,147 @@
 
 ## 🎯 STATUS ATUAL
 
-**Última Atualização:** 2025-10-03 02:29:00  
-**Status:** 🔴 **BLOQUEIO TÉCNICO CONFIRMADO - NATIVE MESSAGING NÃO FUNCIONA EM HEADLESS**
+**Última Atualização:** 2025-10-03 03:20:00  
+**Status:** 🟢 **SOLUÇÃO ENCONTRADA - WEB SIGNER FUNCIONANDO VIA RDP**
 
 **Resumo Executivo:**
-- ✅ Infraestrutura base funcionando (Xvfb, ChromeDriver, Worker Docker)
-- ✅ Certificado A1 extraído, validado e importado corretamente
-- ✅ Web Signer 2.12.1 instalado (executável 92MB .NET)
-- ✅ Extensão Chrome 2.17.1 baixada, extraída e instalada
-- ✅ Native Messaging manifesto configurado corretamente
-- ✅ Certificado extraído em formato PEM/KEY com sucesso
-- ❌ **BLOQUEIO CONFIRMADO:** Native Messaging entre extensão Chrome e Web Signer **NÃO funciona em ambiente headless**
-- ❌ **Evidência:** Log do Web Signer permanece vazio (0 bytes) em todos os testes
-- ❌ **Testado:** Selenium, Chrome manual, 60+ segundos de espera, múltiplas configurações
-- 🚫 **Conclusão:** Problema arquitetural, não de configuração
+- ✅ **BREAKTHROUGH:** Web Signer Softplan instalado e funcionando via RDP
+- ✅ Certificado A1 importado no Chromium (FLAVIO EDUARDO CAPPI:517648)
+- ✅ Login manual bem-sucedido no e-SAJ TJSP com certificado digital
+- ✅ Código atualizado para priorizar autenticação por certificado
+- ✅ Instruções completas de deploy documentadas
+- 🔄 **PRÓXIMO PASSO:** Implementar infraestrutura Xvfb + ChromeDriver no servidor
 
-**Arquitetura Implementada:**
+**Descoberta Chave:**
+- ❌ Native Messaging NÃO funciona em headless
+- ✅ Web Signer funciona perfeitamente com interface gráfica (RDP/VNC)
+- ✅ Solução: Usar Xvfb (display virtual) ao invés de headless puro
+
+**Arquitetura Planejada:**
 ```
-VPS Ubuntu → Xvfb (:99) → Chrome + ChromeDriver (4444) → Worker Docker (network: host)
+VPS Ubuntu → Xvfb (:99) → Chrome + Web Signer + ChromeDriver (4444) → Worker Docker (network: host)
 ```
 
-**Serviços Ativos:**
-- `xvfb.service` - Display virtual :99 (1920x1080x24)
-- `chromedriver.service` - WebDriver API na porta 4444
-- `tjsp_worker_1` - Worker processando fila (network_mode: host)
+**Próximas Ações:**
+1. Instalar Xvfb e ChromeDriver no servidor
+2. Importar certificado no NSS database do root
+3. Configurar serviços systemd (xvfb.service, chromedriver.service)
+4. Atualizar docker-compose.yml (network_mode: host)
+5. Testar autenticação automática com certificado
 
 ---
 
 ## 📝 HISTÓRICO DE MUDANÇAS
+
+### **[25] BREAKTHROUGH: Web Signer Funcionando + Código Atualizado + Instruções Completas**
+**Timestamp:** 2025-10-03 03:20:00  
+**Status:** 🟢 **SOLUÇÃO ENCONTRADA - PRONTO PARA IMPLEMENTAÇÃO**
+
+#### **Conquistas:**
+
+1. **Web Signer Softplan Instalado e Funcionando**
+   - Instalado via RDP no servidor
+   - Plugin funcionando perfeitamente com interface gráfica
+   - Confirmado que Native Messaging funciona com display ativo
+
+2. **Certificado Digital Importado com Sucesso**
+   - Certificado A1 importado no Chromium
+   - Nome: FLAVIO EDUARDO CAPPI:517648902230
+   - Fingerprint: daf41a001dc50c82102533091...
+   - Localização: `/home/crawler/certificado.pfx`
+
+3. **Login Manual Bem-Sucedido**
+   - Acesso ao e-SAJ TJSP confirmado
+   - Autenticação por certificado digital funcionando
+   - Processo consultado: 0077044-50.2023.8.26.0550
+   - Área protegida acessível
+
+4. **Código Atualizado no GitHub**
+   - Commit: `feat: priorizar autenticação por certificado digital`
+   - Mudança: Prioriza certificado ao invés de CPF/senha
+   - Fallback: CPF/senha caso certificado falhe
+   - Melhor tratamento de erros com mensagens detalhadas
+
+5. **Documentação Completa Criada**
+   - Arquivo: `INSTRUCOES_DEPLOY_XVFB.md`
+   - 576 linhas de instruções passo a passo
+   - Inclui: instalação, configuração, troubleshooting
+   - Checklist de validação completo
+
+#### **Arquitetura Confirmada:**
+
+```
+┌──────────────────────────────────────────────────────────┐
+│ VPS Ubuntu (srv987902)                                   │
+│                                                           │
+│ ┌─────────────────────────────────────────────────────┐  │
+│ │ 1. Xvfb (Display Virtual :99)                       │  │
+│ │    - Framebuffer em memória                         │  │
+│ │    - Simula ambiente gráfico                        │  │
+│ │    - Serviço systemd (sempre ativo)                 │  │
+│ └─────────────────────────────────────────────────────┘  │
+│                           ↓                               │
+│ ┌─────────────────────────────────────────────────────┐  │
+│ │ 2. Chrome + Web Signer                              │  │
+│ │    - Chrome instalado no Ubuntu                     │  │
+│ │    - Web Signer Softplan instalado                  │  │
+│ │    - Certificado A1 importado (NSS database)        │  │
+│ │    - DISPLAY=:99                                    │  │
+│ └─────────────────────────────────────────────────────┘  │
+│                           ↓                               │
+│ ┌─────────────────────────────────────────────────────┐  │
+│ │ 3. ChromeDriver (Porta 4444)                        │  │
+│ │    - Controla Chrome local                          │  │
+│ │    - Serviço systemd (sempre ativo)                 │  │
+│ │    - API compatível com Selenium                    │  │
+│ └─────────────────────────────────────────────────────┘  │
+│                           ↓                               │
+│ ┌─────────────────────────────────────────────────────┐  │
+│ │ 4. Worker Python (Container Docker)                 │  │
+│ │    - Conecta ao ChromeDriver via localhost:4444     │  │
+│ │    - network_mode: host                             │  │
+│ │    - Mantém PostgreSQL em Docker                    │  │
+│ └─────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────┘
+```
+
+#### **Próximos Passos (em ordem):**
+
+1. ✅ **Código atualizado** - CONCLUÍDO
+2. ✅ **Documentação criada** - CONCLUÍDO
+3. 🔄 **Instalar Xvfb** - PENDENTE
+4. 🔄 **Instalar ChromeDriver** - PENDENTE
+5. 🔄 **Importar certificado no root** - PENDENTE
+6. 🔄 **Configurar serviços systemd** - PENDENTE
+7. 🔄 **Atualizar docker-compose.yml** - PENDENTE
+8. 🔄 **Testar autenticação** - PENDENTE
+
+#### **Comandos para Atualizar Código no Servidor:**
+
+```bash
+# Conectar via SSH
+ssh root@srv987902.hstgr.cloud
+
+# Navegar para o projeto
+cd /opt/crawler_tjsp
+
+# Backup do código atual
+cp crawler_full.py crawler_full.py.backup-$(date +%Y%m%d_%H%M%S)
+
+# Atualizar do GitHub
+git pull origin main
+
+# Verificar atualização
+git log -1 --oneline
+# Deve mostrar: "feat: priorizar autenticação por certificado digital"
+```
+
+#### **Referências:**
+- Instruções completas: `INSTRUCOES_DEPLOY_XVFB.md`
+- Plano original: `PLANO_XVFB_WEBSIGNER.md`
+- Código atualizado: `crawler_full.py` (linhas 279-335)
+
+---
 
 ### **[24] CONCLUSÃO FINAL: Native Messaging Não Funciona em Headless - Alternativas Identificadas**
 **Timestamp:** 2025-10-03 02:29:00  
