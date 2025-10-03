@@ -11,18 +11,18 @@
 
 ## 🎯 STATUS ATUAL
 
-**Última Atualização:** 2025-10-03 04:57:00  
-**Status:** 🟡 **INFRAESTRUTURA PRONTA - AGUARDANDO LOGIN NO GOOGLE**
+**Última Atualização:** 2025-10-03 04:59:00  
+**Status:** 🔴 **BLOQUEADO - LOGIN NO GOOGLE FALHOU**
 
 **Resumo Executivo:**
 - ✅ Xvfb instalado e rodando (display :99)
 - ✅ ChromeDriver instalado e rodando (porta 4444)
 - ✅ Certificado A1 importado no NSS database do root
 - ✅ Web Signer instalado e manifesto corrigido
-- ✅ Developer Mode ativado com sucesso
-- ✅ Extensão Web Signer copiada do perfil crawler
-- ❌ **BLOQUEIO:** Login no Google falhou (botão "Sign in" não encontrado)
-- ⏸️ **PAUSADO:** Aguardando retorno para completar login e instalação da extensão
+- ❌ **BLOQUEIO CRÍTICO:** Login no Google FALHOU (botão "Sign in" não encontrado)
+- ❌ **SEM LOGIN:** Developer Mode NÃO foi ativado (requer login)
+- ❌ **SEM LOGIN:** Extensão NÃO foi instalada (requer login)
+- ⏸️ **PAUSADO:** Aguardando resolver login no Google para prosseguir
 
 **Arquitetura Implementada:**
 ```
@@ -30,12 +30,12 @@ VPS Ubuntu → Xvfb (:99) → Chrome + Web Signer + ChromeDriver (4444) → Work
 ```
 
 **Próximos Passos (Quando Retornar):**
-1. ✅ Fazer login no Google (revisaprecatorio@gmail.com / R3v1s@2025)
-2. ✅ Ativar Developer Mode (JÁ FEITO)
-3. 🔄 Instalar extensão Web Signer via Chrome Web Store
-4. 🔄 Verificar instalação (chrome://extensions/ + ícone de extensões)
-5. 🔄 Configurar extensão (importar certificado)
-6. 🔄 Testar login no e-SAJ com certificado digital
+1. ❌ **FAZER LOGIN NO GOOGLE** (revisaprecatorio@gmail.com / R3v1s@2025) - BLOQUEIO ATUAL
+2. ⏸️ Ativar Developer Mode (DEPENDE DO PASSO 1)
+3. ⏸️ Instalar extensão Web Signer via Chrome Web Store (DEPENDE DO PASSO 1 e 2)
+4. ⏸️ Verificar instalação (chrome://extensions/ + ícone de extensões)
+5. ⏸️ Configurar extensão (importar certificado)
+6. ⏸️ Testar login no e-SAJ com certificado digital
 
 **Credenciais:**
 - Google: revisaprecatorio@gmail.com / R3v1s@2025
@@ -45,9 +45,9 @@ VPS Ubuntu → Xvfb (:99) → Chrome + Web Signer + ChromeDriver (4444) → Work
 
 ## 📝 HISTÓRICO DE MUDANÇAS
 
-### **[26] Infraestrutura Completa + Developer Mode Ativado - Aguardando Login Google**
-**Timestamp:** 2025-10-03 04:57:00  
-**Status:** 🟡 **INFRAESTRUTURA PRONTA - PAUSADO PARA CONTINUAÇÃO**
+### **[26] Infraestrutura Completa - BLOQUEADO no Login Google**
+**Timestamp:** 2025-10-03 04:59:00  
+**Status:** 🔴 **BLOQUEADO - LOGIN NO GOOGLE FALHOU**
 
 #### **Progresso da Sessão:**
 
@@ -56,21 +56,21 @@ VPS Ubuntu → Xvfb (:99) → Chrome + Web Signer + ChromeDriver (4444) → Work
 2. ChromeDriver instalado e rodando na porta 4444
 3. Certificado A1 importado no NSS database do root
 4. Web Signer manifesto corrigido (`/opt/softplan-websigner/websigner`)
-5. Extensão Web Signer localizada e copiada do perfil crawler
-6. Developer Mode ativado com sucesso via JavaScript
+5. Extensão Web Signer localizada no perfil crawler
 
-**❌ Bloqueio Encontrado:**
-- Login no Google falhou - botão "Sign in" não foi localizado
-- Extensão não foi instalada (requer login no Google)
-- Chrome Web Store requer autenticação para instalar extensões
+**❌ BLOQUEIO CRÍTICO:**
+- **Login no Google FALHOU** - botão "Sign in" não foi localizado
+- **SEM LOGIN = SEM DEVELOPER MODE** - Não foi ativado (requer login)
+- **SEM LOGIN = SEM EXTENSÃO** - Não foi instalada (requer login)
+- Chrome Web Store requer autenticação Google para tudo
 
-**📋 Sequência Correta Identificada:**
-1. Login no Google (revisaprecatorio@gmail.com)
-2. Ativar Developer Mode ✅ (CONCLUÍDO)
-3. Instalar extensão Web Signer via Chrome Web Store
-4. Verificar instalação em chrome://extensions/
-5. Configurar extensão (importar certificado)
-6. Testar login no e-SAJ
+**📋 Sequência Correta (TUDO Depende do Login):**
+1. ❌ Login no Google (revisaprecatorio@gmail.com) - **FALHOU - BLOQUEIO ATUAL**
+2. ⏸️ Ativar Developer Mode (DEPENDE DO PASSO 1)
+3. ⏸️ Instalar extensão Web Signer (DEPENDE DO PASSO 1 e 2)
+4. ⏸️ Verificar instalação em chrome://extensions/
+5. ⏸️ Configurar extensão (importar certificado)
+6. ⏸️ Testar login no e-SAJ
 
 **🔧 Scripts Criados:**
 - `setup_chrome_complete.py` - Setup completo (login + dev mode + extensão)
@@ -87,10 +87,13 @@ VPS Ubuntu → Xvfb (:99) → Chrome + Web Signer + ChromeDriver (4444) → Work
 - `setup_step10_final_check.png` - Verificação final
 
 **🎯 Próxima Sessão:**
-1. Resolver login no Google (pode precisar de interação manual)
-2. Instalar extensão Web Signer
-3. Configurar extensão com certificado
-4. Testar autenticação no e-SAJ
+1. **PRIORIDADE MÁXIMA:** Resolver login no Google (revisaprecatorio@gmail.com / R3v1s@2025)
+   - Pode precisar de interação manual ou ajuste no script
+   - SEM ISSO, NADA MAIS FUNCIONA
+2. Após login bem-sucedido: Ativar Developer Mode
+3. Após developer mode: Instalar extensão Web Signer
+4. Após instalação: Configurar extensão com certificado
+5. Após configuração: Testar autenticação no e-SAJ
 
 **📝 Observações Importantes:**
 - Extensão está no perfil: `/home/crawler/.config/google.chrome/Default/Extensions/bbafmabaelnnkondpfpjmdklbmfnbmol/2.17.1_0/`
