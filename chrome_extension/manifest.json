@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "Web Signer Custom (WebSocket)",
+  "version": "1.0.0",
+  "description": "Extensão customizada que usa WebSocket para certificados digitais",
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://esaj.tjsp.jus.br/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://esaj.tjsp.jus.br/*"],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["injected.js"],
+      "matches": ["https://esaj.tjsp.jus.br/*"]
+    }
+  ],
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  }
+}
