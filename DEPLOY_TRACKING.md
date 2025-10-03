@@ -10,41 +10,50 @@
 
 ## 🎯 STATUS ATUAL
 
-**Última Atualização:** 2025-10-03 19:37:00  
-**Status:** 🟡 **EM TESTE - Solução de Perfil Temporário**
+**Última Atualização:** 2025-10-03 20:40:00  
+**Status:** 🟢 **IMPLEMENTANDO - Solução WebSocket Custom**
 
 **Resumo Executivo:**
 - ✅ Xvfb instalado e rodando (display :99) como usuário `crawler`
 - ✅ ChromeDriver instalado e rodando (porta 4444) como usuário `crawler`
-- ✅ Certificado A1 importado e funcionando no Perfil do RDP
-- ✅ Web Signer instalado e extensão configurada no Perfil do RDP
-- ✅ Google logado no Perfil do RDP (sem CAPTCHAs)
-- 🔄 **EM TESTE:** Copiar extensão Web Signer para Perfil temporário
-- 🔄 **TESTANDO:** Selenium com Perfil temporário + extensão copiada
+- ✅ Certificado A1 importado e funcionando
+- ✅ **DESCOBERTA CRÍTICA:** e-SAJ NÃO verifica Extension ID específico
+- ✅ **SOLUÇÃO VIÁVEL:** WebSocket substituindo Native Messaging
+- 🔄 **EM IMPLEMENTAÇÃO:** Servidor WebSocket + Extensão customizada
 
-**Arquitetura Implementada:**
+**Arquitetura Nova (WebSocket):**
 ```
-Usuário crawler:
-  ├── RDP (Chrome aberto, Google logado, Web Signer configurado)
-  │   └── Perfil: /home/crawler/.config/google-chrome
-  ├── Xvfb (DISPLAY=:99)
-  ├── ChromeDriver (porta 4444)
-  └── Selenium
-      └── Perfil temporário: /tmp/chrome_profile_test
-          └── Extensão Web Signer (copiada do Perfil RDP)
+VPS Ubuntu (srv987902):
+  ├── Servidor WebSocket (Python - porta 8765)
+  │   ├── Gerencia certificado A1 (.pfx)
+  │   ├── Assina dados com cryptography
+  │   └── Responde requisições da extensão
+  │
+  ├── Extensão Chrome Customizada
+  │   ├── Emula API window.WebSigner
+  │   ├── Conecta via WebSocket (não Native Messaging)
+  │   └── Carregada no Chrome via --load-extension
+  │
+  ├── Selenium + ChromeDriver
+  │   ├── Usa extensão customizada
+  │   └── Funciona em headless!
+  │
+  └── PostgreSQL + Crawler Worker
+      └── Tudo local (sem latência)
 ```
 
-**Solução Encontrada:**
-- ✅ **Evitar conflito de Perfil:** Chrome do RDP continua aberto
-- ✅ **Evitar CAPTCHAs:** Não fecha Chrome, não perde sessão Google
-- ✅ **Extensão disponível:** Copiada do Perfil RDP para temporário
-- ✅ **Certificado acessível:** Web Signer no Perfil temporário
+**Descobertas do Teste:**
+- ✅ e-SAJ **NÃO verifica** Extension ID `bbafmabaelnnkondpfpjmdklbmfnbmol`
+- ✅ e-SAJ carrega script: `softplan-websigner.js`
+- ✅ Script chama API genérica `window.WebSigner`
+- ✅ **Podemos emular essa API!**
 
-**Próximos Passos (Em Execução):**
-1. 🔄 Copiar extensão Web Signer para Perfil temporário
-2. 🔄 Testar detecção de certificado via Selenium
-3. ⏸️ Se funcionar: Integrar ao crawler principal
-4. ⏸️ Testar busca de processos completa
+**Próximos Passos (Implementação WebSocket):**
+1. 🔄 Finalizar servidor WebSocket Python
+2. 🔄 Completar extensão Chrome customizada
+3. 🔄 Testar integração WebSocket + Extensão
+4. 🔄 Validar login no e-SAJ com certificado
+5. ⏸️ Integrar ao crawler principal
 
 **Credenciais:**
 - Google: revisaprecatorio@gmail.com / R3v1s@2025
@@ -53,6 +62,54 @@ Usuário crawler:
 ---
 
 ## 📝 HISTÓRICO DE MUDANÇAS
+
+### **[28] Decisão: Implementar Solução WebSocket Custom**
+**Timestamp:** 2025-10-03 20:40:00  
+**Status:** 🟢 **EM IMPLEMENTAÇÃO - WebSocket + Extensão Customizada**
+
+#### **Testes Realizados:**
+1. **test_esaj_requirements.py** - Verificou que Web Signer original existe
+2. **test_esaj_simple.py** - **DESCOBERTA CRÍTICA:**
+   - ✅ e-SAJ **NÃO verifica** Extension ID específico
+   - ✅ e-SAJ carrega `softplan-websigner.js` (wrapper JavaScript)
+   - ✅ Script chama API genérica `window.WebSigner`
+
+#### **Decisão Tomada:**
+**Implementar Solução WebSocket** ao invés de Windows Server
+
+**Motivos:**
+- ✅ e-SAJ não verifica Extension ID (comprovado por teste)
+- ✅ Custo $0 adicional vs $16-45/mês Windows
+- ✅ Controle total da solução
+- ✅ PostgreSQL local (sem latência)
+- ✅ Funciona em headless
+
+#### **Arquitetura WebSocket:**
+```
+Servidor WebSocket (Python) ←→ Extensão Chrome Custom ←→ e-SAJ
+     ↓                              ↓
+Certificado A1              window.WebSigner API
+```
+
+#### **Componentes Criados:**
+1. `websocket_cert_server.py` - Servidor WebSocket Python
+2. `chrome_extension/manifest.json` - Manifest da extensão
+3. `chrome_extension/background.js` - Service Worker
+4. `chrome_extension/content.js` - Content Script
+5. `chrome_extension/injected.js` - API window.WebSigner
+
+#### **Próximos Passos:**
+1. Completar ícones da extensão
+2. Testar servidor WebSocket standalone
+3. Testar extensão no Chrome manualmente
+4. Integrar com Selenium
+5. Validar login no e-SAJ
+
+#### **Alternativa Descartada:**
+- ❌ Windows Server ($16-45/mês)
+- Motivo: WebSocket é viável e sem custo adicional
+
+---
 
 ### **[27] Solução de Perfil Temporário - Evitando CAPTCHAs**
 **Timestamp:** 2025-10-03 19:37:00  
