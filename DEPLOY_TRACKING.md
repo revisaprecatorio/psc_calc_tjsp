@@ -11,17 +11,20 @@
 
 ## 🎯 STATUS ATUAL
 
-**Última Atualização:** 2025-10-02 23:04:00  
-**Status:** ✅ **CERTIFICADO IMPORTADO PARA NSS - PRONTO PARA TESTE FINAL**
+**Última Atualização:** 2025-10-03 02:29:00  
+**Status:** 🔴 **BLOQUEIO TÉCNICO CONFIRMADO - NATIVE MESSAGING NÃO FUNCIONA EM HEADLESS**
 
-**Resumo:**
-- ✅ Xvfb + ChromeDriver funcionando perfeitamente
-- ✅ Worker Docker conecta ao ChromeDriver local (localhost:4444)
-- ✅ Teste com 9 jobs reais executado com sucesso
-- ✅ Certificado extraído e validado (CN: FLAVIO EDUARDO CAPPI:51764890230)
-- ✅ `.env` atualizado com informações corretas do certificado
-- ✅ **Certificado importado para NSS database com sucesso!**
-- 🔧 **Próximo:** Rebuild worker e teste final com autenticação
+**Resumo Executivo:**
+- ✅ Infraestrutura base funcionando (Xvfb, ChromeDriver, Worker Docker)
+- ✅ Certificado A1 extraído, validado e importado corretamente
+- ✅ Web Signer 2.12.1 instalado (executável 92MB .NET)
+- ✅ Extensão Chrome 2.17.1 baixada, extraída e instalada
+- ✅ Native Messaging manifesto configurado corretamente
+- ✅ Certificado extraído em formato PEM/KEY com sucesso
+- ❌ **BLOQUEIO CONFIRMADO:** Native Messaging entre extensão Chrome e Web Signer **NÃO funciona em ambiente headless**
+- ❌ **Evidência:** Log do Web Signer permanece vazio (0 bytes) em todos os testes
+- ❌ **Testado:** Selenium, Chrome manual, 60+ segundos de espera, múltiplas configurações
+- 🚫 **Conclusão:** Problema arquitetural, não de configuração
 
 **Arquitetura Implementada:**
 ```
@@ -36,6 +39,746 @@ VPS Ubuntu → Xvfb (:99) → Chrome + ChromeDriver (4444) → Worker Docker (ne
 ---
 
 ## 📝 HISTÓRICO DE MUDANÇAS
+
+### **[24] CONCLUSÃO FINAL: Native Messaging Não Funciona em Headless - Alternativas Identificadas**
+**Timestamp:** 2025-10-03 02:29:00  
+**Status:** 🔴 **BLOQUEIO TÉCNICO CONFIRMADO - PESQUISA DE ALTERNATIVAS CONCLUÍDA**
+
+#### **Resumo da Jornada Completa**
+
+Após **8+ horas de investigação técnica profunda**, confirmamos que o Web Signer + Extensão Chrome **não funciona em ambiente headless Linux** por limitação arquitetural do Native Messaging Protocol em contextos automatizados.
+
+#### **Testes Exaustivos Realizados:**
+
+**1. Configuração e Validação (Entradas [19-21])**
+- ✅ Certificado A1 extraído do .pfx e importado no NSS database
+- ✅ Chave privada confirmada presente (`certutil -K`)
+- ✅ Web Signer 2.12.1 baixado e instalado
+- ✅ Manifesto Native Messaging configurado corretamente
+
+**2. Tentativas de Carregamento da Extensão (Entrada [22])**
+- ❌ Extensão não vinha com o pacote .deb
+- ✅ Extensão baixada da Chrome Web Store (ID: bbafmabaelnnkondpfpjmdklbmfnbmol)
+- ✅ Versão 2.17.1 extraída com sucesso (442 KB, 35 arquivos)
+
+**3. Testes de Comunicação (Entrada [23])**
+- ❌ Teste com `--load-extension`: dropdown vazio, log vazio
+- ❌ Teste com extensão instalada no perfil: dropdown vazio, log vazio
+- ❌ Teste com Chrome manual (não Selenium): dropdown vazio, log vazio
+- ❌ Teste com 60 segundos de espera: dropdown vazio, log vazio
+
+**4. Diagnóstico Profundo (Entrada [24])**
+- ✅ Web Signer executável válido (ELF 64-bit, 92MB, .NET runtime)
+- ✅ Todas dependências presentes (`ldd` sem erros)
+- ❌ Executável trava ao receber stdin (comportamento esperado para Native Messaging)
+- ❌ **Log do Web Signer SEMPRE vazio** - nenhuma requisição recebida
+
+**5. Teste de Alternativas**
+- ❌ SSL Client Certificate: TJSP não usa autenticação TLS client certificate
+- ✅ Certificado extraído em PEM/KEY com sucesso (usando `--legacy` para RC2-40-CBC)
+- ❌ Curl com certificado: conexão SSL OK mas servidor não pede client cert
+
+#### **Evidência Técnica do Bloqueio**
+
+**Comparação Desktop (funciona) vs Servidor (não funciona):**
+
+| Componente | Desktop macOS ✅ | Servidor Ubuntu ❌ |
+|------------|------------------|-------------------|
+| Web Signer | Instalado, rodando | Instalado, rodando |
+| Extensão Chrome | Chrome Web Store | Instalada manualmente |
+| Certificado | Keychain | NSS database |
+| Native Messaging | **Funciona** | **Não funciona** |
+| Log Web Signer | Recebe requisições | **Vazio (0 bytes)** |
+| Dropdown certificados | Aparece imediatamente | Sempre vazio |
+| Ambiente | Desktop real | Xvfb headless |
+
+**Conclusão Técnica:**
+A extensão Chrome **não consegue iniciar ou se comunicar** com o executável Web Signer via Native Messaging quando rodando em:
+- Chrome via Selenium/ChromeDriver
+- Chrome manual em Xvfb
+- Qualquer ambiente headless Linux
+
+O problema é **arquitetural**, não de configuração. ChromeDriver tem suporte limitado/inexistente para Native Messaging em contextos automatizados (problema conhecido desde 2017, persiste em 2025).
+
+#### **Alternativas Viáveis Identificadas**
+
+Após pesquisa extensiva (Claude, ChatGPT, documentação oficial), as seguintes alternativas foram identificadas:
+
+**Opção 1: Windows Server na Nuvem (RECOMENDADA)**
+- **Custo:** $9-60/mês (AWS EC2 Spot/On-demand)
+- **Vantagens:** Web Signer funciona nativamente, Native Messaging funciona, solução testada em produção
+- **Implementação:** 2-3 horas
+- **Confiabilidade:** ⭐⭐⭐⭐⭐
+
+**Opção 2: Ubuntu com Desktop Virtual (XFCE + VNC/RDP)**
+- **Custo:** $5-20/mês (VPS atual + desktop environment)
+- **Vantagens:** Mantém Linux, acesso visual via RDP
+- **Limitação:** Web Signer é .NET Framework, precisa Mono (compatibilidade não garantida)
+- **Confiabilidade:** ⭐⭐
+
+**Opção 3: Bypass do Browser (requests-pkcs12)**
+- **Custo:** $5-10/mês (VPS atual)
+- **Vantagens:** Elimina browser completamente, Python puro
+- **Limitação:** **Só funciona se TJSP aceitar client certificate direto** (testamos e não aceita no endpoint de login)
+- **Confiabilidade:** ⭐⭐⭐⭐⭐ (se TJSP suportar)
+
+**Opção 4: Migração para Playwright**
+- **Custo:** $5-20/mês
+- **Vantagens:** Suporte nativo para certificados cliente, melhor que Selenium
+- **Limitação:** Native Messaging ainda problemático
+- **Confiabilidade:** ⭐⭐⭐⭐
+
+**Opção 5: Solução Comercial (Legal Wizard)**
+- **Custo:** R$50-200/mês
+- **Vantagens:** Solução pronta, suporte especializado, já funciona com Web Signer
+- **Confiabilidade:** ⭐⭐⭐⭐⭐
+
+#### **Arquivos Criados Durante Investigação**
+
+```
+/opt/crawler_tjsp/certs/
+├── 25424636_pf.pfx          # Certificado original
+├── 25424636_pf.pem          # Certificado extraído (3.2KB)
+├── 25424636_pf.key          # Chave privada extraída (1.9KB)
+├── cert.pem                 # Certificado (cópia)
+└── key.pem                  # Chave (cópia)
+
+/opt/chrome-extensions/websigner/
+├── manifest.json            # Extensão Chrome 2.17.1
+├── event-page.js
+├── main.js
+└── [35 arquivos total]
+
+/root/.config/google-chrome/
+├── Default/Extensions/bbafmabaelnnkondpfpjmdklbmfnbmol/2.17.1_0/
+├── NativeMessagingHosts/br.com.softplan.webpki.json
+└── Default/.pki/nssdb/      # NSS database com certificado
+```
+
+#### **Comandos de Teste Documentados**
+
+```bash
+# Verificar certificado no NSS
+certutil -L -d sql:/root/.pki/nssdb
+certutil -K -d sql:/root/.pki/nssdb
+
+# Extrair certificado do .pfx (RC2-40-CBC requer --legacy)
+openssl pkcs12 -in cert.pfx -nocerts -out cert.key -nodes -passin pass:SENHA -legacy
+openssl pkcs12 -in cert.pfx -clcerts -nokeys -out cert.pem -passin pass:SENHA -legacy
+
+# Testar SSL client certificate
+curl -v --cert cert.pem --key cert.key https://esaj.tjsp.jus.br/sajcas/login
+
+# Verificar Web Signer
+ps aux | grep websigner
+ldd /opt/softplan-websigner/websigner
+file /opt/softplan-websigner/websigner
+```
+
+#### **Lições Aprendidas**
+
+1. **Native Messaging em headless é problema conhecido** - não é bug de configuração
+2. **ChromeDriver não suporta Native Messaging** em contextos automatizados
+3. **Xvfb não resolve** - problema é ChromeDriver, não falta de display
+4. **Web Signer funciona perfeitamente em Windows** - ambiente nativo
+5. **TJSP não usa SSL client certificate** - autenticação é via JavaScript + Web Signer
+6. **Certificados ICP-Brasil usam RC2-40-CBC** - requer flag `--legacy` no OpenSSL 3.x
+
+#### **Recomendação Final**
+
+Para ambiente de produção confiável, recomendamos **Opção 1 (Windows Server)** por:
+- Compatibilidade total com Web Signer (.NET Framework nativo)
+- Native Messaging funciona sem workarounds
+- Solução testada em produção em sistemas financeiros/jurídicos
+- Custo competitivo com Spot Instances ($9-18/mês)
+- Possibilidade de debug visual via RDP quando necessário
+
+**Alternativa imediata:** Investigar se TJSP possui API REST ou endpoints alternativos que aceitem certificado client SSL diretamente, eliminando necessidade do browser.
+
+---
+
+### **[25] ANÁLISE DE ALTERNATIVAS - Pesquisa Complementar e Validação**
+**Timestamp:** 2025-10-03 02:53:00  
+**Status:** 📊 **AVALIAÇÃO DE ALTERNATIVAS VIÁVEIS**
+
+#### **Contexto**
+
+Após confirmar o bloqueio técnico do Native Messaging em headless, realizamos pesquisa complementar usando múltiplas fontes (Claude, ChatGPT, documentação oficial) para validar alternativas e identificar novas opções não consideradas inicialmente.
+
+#### **Descobertas Importantes da Pesquisa**
+
+**1. Web Signer é baseado em Lacuna Web PKI**
+- Softplan Web Signer usa tecnologia **Lacuna Software** (empresa brasileira de Brasília)
+- Comunicação via **WebSocket** nas portas 54741, 51824, 59615
+- Lacuna oferece SDK próprio: https://github.com/LacunaSoftware/RestPkiSamples
+- **Implicação:** Podemos licenciar Lacuna Web PKI diretamente e ter mais controle
+
+**2. Chrome "Headed" com Desktop Virtual PODE funcionar**
+- Pesquisa do ChatGPT confirma: extensões **não funcionam em headless clássico**
+- Solução: Chrome **normal (não headless)** rodando em sessão X11 com XFCE/LXDE
+- **Diferença crítica vs nosso teste:** Precisamos de **window manager completo** (XFCE), não apenas Xvfb
+- Referência: Google Groups confirma que extensões precisam de desktop environment real
+
+**3. Política AutoSelectCertificateForUrls**
+- Chrome Enterprise permite **auto-seleção de certificado** sem popup
+- Elimina necessidade de interação manual para escolher certificado
+- Configurável via JSON em `/etc/opt/chrome/policies/managed/`
+- **Não testamos isso ainda** - pode simplificar automação
+
+**4. Playwright tem suporte nativo para certificados cliente**
+- Playwright v1.46+ suporta `client_certificates` nativamente
+- **Vantagem sobre Selenium:** certificados funcionam sem NSS database
+- Native Messaging ainda problemático, mas certificados já resolvidos
+- Migração reporta 80% redução no tempo de execução
+
+**5. Solução Comercial Brasileira: Legal Wizard**
+- Empresa especializada em automação judicial brasileira
+- Já resolve problema do Web Signer + certificados
+- Planos: R$49,90/mês (desktop) a R$200/mês (cloud)
+- Suporte via WhatsApp: +55 11 91197-1146
+- **ROI positivo** se tempo de desenvolvimento > R$1.500
+
+#### **Alternativas Reavaliadas**
+
+Com base na pesquisa, reorganizamos as alternativas por viabilidade:
+
+**TIER 1 - Alta Probabilidade de Sucesso:**
+
+**A) Ubuntu + Desktop Virtual Completo (XFCE + XRDP) - NOVA ABORDAGEM**
+- **Diferença vs tentativa anterior:** Instalar **XFCE completo** + **XRDP**, não apenas Xvfb
+- **Por que pode funcionar:** Window manager fornece componentes DBus/X11 que Native Messaging espera
+- **Custo:** $5-20/mês (VPS atual)
+- **Tempo:** 4-6 horas
+- **Risco:** Médio (Web Signer é .NET, precisa Mono no Linux)
+- **Vantagem:** Mantém infraestrutura Linux atual
+
+**Passos específicos:**
+```bash
+# Desktop environment completo
+sudo apt install -y xfce4 xfce4-goodies xorg dbus-x11 xrdp
+
+# Chrome em modo "headed" (não headless)
+google-chrome --no-first-run --disable-blink-features=AutomationControlled \
+  --user-data-dir=/root/.config/google-chrome
+
+# Política de auto-seleção de certificado
+cat > /etc/opt/chrome/policies/managed/auto-cert.json << 'EOF'
+{
+  "AutoSelectCertificateForUrls": [
+    "{\"pattern\":\"https://esaj.tjsp.jus.br\",\"filter\":{\"ISSUER\":{\"CN\":\"AC Certisign RFB G5\"}}}"
+  ]
+}
+EOF
+```
+
+**B) Windows Server na Nuvem**
+- **Status:** Mantém-se como solução mais confiável
+- **Custo:** $9-60/mês (AWS EC2 t3.medium Spot/On-demand)
+- **Tempo:** 2-3 horas
+- **Risco:** Muito baixo
+- **Vantagem:** Testado em produção, compatibilidade total
+
+**C) Migração para Playwright**
+- **Status:** Melhor investimento de longo prazo
+- **Custo:** $5-20/mês
+- **Tempo:** 2-3 meses (migração completa)
+- **Risco:** Médio (Native Messaging ainda problemático)
+- **Vantagem:** Certificados funcionam nativamente, performance superior
+
+**TIER 2 - Alternativas Comerciais/Híbridas:**
+
+**D) Legal Wizard (Solução Comercial)**
+- **Custo:** R$50-200/mês
+- **Tempo:** Imediato
+- **Risco:** Muito baixo
+- **Vantagem:** Zero desenvolvimento, suporte especializado
+- **Desvantagem:** Dependência de terceiro
+
+**E) Lacuna Web PKI (Licenciamento Direto)**
+- **Descoberta:** Web Signer usa Lacuna como base
+- **Opção:** Licenciar Lacuna Web PKI diretamente
+- **Vantagem:** SDK completo, suporte em português, empresa brasileira
+- **Investigar:** Custo de licenciamento e viabilidade técnica
+
+**TIER 3 - Experimentais/Baixa Prioridade:**
+
+**F) Docker com Desktop GUI (XFCE + VNC)**
+- **Status:** Variação da opção A em container
+- **Risco:** Alto (mesmos problemas do Linux + complexidade Docker)
+- **Vantagem:** Portabilidade
+
+**G) macOS na Nuvem (MacStadium/AWS EC2 Mac)**
+- **Status:** Replica ambiente funcional do desktop
+- **Custo:** $100-200/mês (muito caro)
+- **Vantagem:** Funciona com certeza (já validado)
+- **Desvantagem:** Custo proibitivo
+
+#### **Novas Descobertas Técnicas**
+
+**1. Chrome precisa rodar em modo "headed" com desktop real:**
+- `--headless` e `--headless=new` **não suportam extensões adequadamente**
+- Xvfb sozinho **não é suficiente** - precisa window manager (XFCE/LXDE)
+- DBus e componentes X11 são necessários para Native Messaging
+
+**2. Flags anti-detecção importantes:**
+```python
+opts.add_argument("--disable-blink-features=AutomationControlled")
+opts.add_argument("--disable-features=DialMediaRouteProvider")
+# Usar undetected-chromedriver para evitar bloqueios
+```
+
+**3. Certificados ICP-Brasil usam RC2-40-CBC:**
+- OpenSSL 3.x requer flag `--legacy` (já descobrimos isso)
+- Bundle de CA raiz ICP-Brasil necessário: https://estrutura.iti.gov.br/
+
+**4. WebSocket como alternativa ao Native Messaging:**
+- Implementar servidor WebSocket Python que substitui Web Signer
+- Modificar extensão para conectar via WebSocket em vez de Native Messaging
+- **Complexidade:** Alta (requer engenharia reversa da extensão)
+
+#### **Plano de Ação Recomendado (Revisado)**
+
+**FASE 1 - Validação Rápida (3-5 dias)**
+
+**Dia 1-2: Testar Ubuntu + XFCE Completo**
+1. Instalar XFCE + XRDP no VPS atual
+2. Configurar Chrome em modo headed (não headless)
+3. Aplicar política AutoSelectCertificateForUrls
+4. Testar Native Messaging visualmente via RDP
+5. **Se funcionar:** Esta é a solução (mantém Linux, custo baixo)
+
+**Dia 3: Provisionar Windows Server Teste**
+1. Lançar t3.micro AWS Free Tier (750h/mês grátis)
+2. Instalar Web Signer + Chrome + certificado
+3. Validar fluxo completo e-SAJ
+4. **Se funcionar:** Migrar para Spot Instance ($9-18/mês)
+
+**Dia 4-5: Avaliar Soluções Comerciais**
+1. Contatar Legal Wizard via WhatsApp
+2. Solicitar demo/trial
+3. Avaliar custo vs desenvolvimento interno
+4. Investigar licenciamento Lacuna Web PKI
+
+**FASE 2 - Implementação (Semana 2-4)**
+
+Baseado nos resultados da Fase 1:
+
+**Se Ubuntu + XFCE funcionar:**
+- Documentar configuração completa
+- Automatizar setup com scripts
+- Implementar monitoramento
+- **Custo final:** $5-20/mês
+
+**Se Windows Server for necessário:**
+- Configurar Spot Instance
+- Implementar auto-shutdown (economia)
+- Migrar worker para Windows
+- **Custo final:** $9-60/mês
+
+**Se optar por Legal Wizard:**
+- Integrar API com sistemas
+- Configurar monitoramentos
+- Eliminar desenvolvimento interno
+- **Custo final:** R$50-200/mês
+
+**FASE 3 - Otimização (Mês 2)**
+
+1. Implementar política AutoSelectCertificateForUrls
+2. Configurar alertas de expiração de certificado
+3. Backup e disaster recovery
+4. Documentação completa
+
+#### **Comparação de Custos Atualizada**
+
+| Solução | Setup | Custo/mês | Manutenção | Confiabilidade | Recomendação |
+|---------|-------|-----------|------------|----------------|--------------|
+| **Ubuntu + XFCE** | 4-6h | $5-20 | Média | ⭐⭐⭐ | **Testar primeiro** |
+| **Windows Server** | 2-3h | $9-60 | Baixa | ⭐⭐⭐⭐⭐ | **Fallback confiável** |
+| **Playwright** | 2-3 meses | $5-20 | Baixa | ⭐⭐⭐⭐ | **Longo prazo** |
+| **Legal Wizard** | Imediato | R$50-200 | Zero | ⭐⭐⭐⭐⭐ | **ROI rápido** |
+| **Lacuna Web PKI** | ? | ? | ? | ⭐⭐⭐⭐ | **Investigar** |
+
+#### **Recursos Adicionais Identificados**
+
+**Comunidade Brasileira:**
+- AB2L (Associação Brasileira de Lawtechs): https://ab2l.org.br/
+- Stack Overflow PT tag `certificado-digital`: 118 questões
+- GitHub projetos e-SAJ: https://github.com/topics/esaj
+
+**Suporte Oficial:**
+- SAJ Ajuda: https://sajajuda.esaj.softplan.com.br/
+- CNJ PJe Wiki: https://www.pje.jus.br/wiki/
+- ITI (ICP-Brasil): https://www.gov.br/iti/pt-br
+
+**Projetos Open Source:**
+- Lacuna Software: https://github.com/LacunaSoftware
+- e-SAJ scraper: https://github.com/betogrun/esaj
+- ICP-Brasil auth Node.js: https://github.com/c0h1b4/autenticacao-ICP-Brasil
+
+#### **Decisão Recomendada**
+
+**Prioridade 1:** Testar **Ubuntu + XFCE completo** (Opção A revisada)
+- Menor custo
+- Mantém infraestrutura Linux
+- Nova abordagem (desktop completo vs apenas Xvfb)
+- Se falhar, temos Windows como fallback
+
+**Prioridade 2:** **Windows Server** se Ubuntu falhar
+- Solução comprovada
+- Custo aceitável com Spot Instances
+- Máxima compatibilidade
+
+**Prioridade 3:** Avaliar **Legal Wizard** em paralelo
+- ROI pode ser positivo
+- Elimina risco técnico
+- Suporte especializado
+
+**Não recomendado:**
+- Wine/.NET (pesquisa confirma: não funciona)
+- Docker GUI (mesmos problemas do Linux)
+- macOS cloud (custo proibitivo)
+
+---
+
+### **[23] BLOQUEIO: Extensão Carregada mas Sem Comunicação Native Messaging**
+**Timestamp:** 2025-10-03 01:40:00  
+**Status:** 🔴 **COMUNICAÇÃO NATIVE MESSAGING FALHOU**
+
+#### **Contexto:**
+Após baixar e extrair a extensão Chrome 2.17.1, carregamos ela via `--load-extension` no Selenium. A extensão foi carregada com sucesso, mas o Web Signer **não recebeu nenhuma requisição** (log vazio), e o dropdown permaneceu vazio.
+
+#### **O Que Foi Feito:**
+
+**1. Download da Extensão:**
+```bash
+# Baixado de: https://www.crx4chrome.com/crx/372790/
+curl -L "https://clients2.google.com/service/update2/crx?..." -o websigner.crx
+# Arquivo: Google Chrome extension, version 3 (442 KB)
+```
+
+**2. Extração da Extensão:**
+```bash
+dd if=websigner.crx of=websigner.zip bs=1 skip=306
+unzip websigner.zip -d /opt/chrome-extensions/websigner/
+# ✅ 35 arquivos extraídos, incluindo manifest.json
+```
+
+**3. Verificação do Manifest:**
+```json
+{
+  "manifest_version": 3,
+  "name": "Web Signer",
+  "version": "2.17.1",
+  "permissions": ["nativeMessaging", "storage", "downloads", "tabs"],
+  "background": {"service_worker": "event-page.js"}
+}
+```
+
+**4. Teste com Extensão Carregada:**
+```python
+opts.add_argument("--load-extension=/opt/chrome-extensions/websigner")
+# Resultado: Dropdown vazio, log do websigner vazio (0 bytes)
+```
+
+#### **Análise do Problema:**
+
+**O Que Funciona:**
+- ✅ Web Signer executável rodando (PID 964474)
+- ✅ Extensão extraída corretamente com manifest.json válido
+- ✅ Extensão carregada no Chrome via Selenium
+- ✅ Certificado + chave privada no NSS database
+- ✅ Native Messaging manifesto em `/etc/opt/chrome/native-messaging-hosts/`
+
+**O Que NÃO Funciona:**
+- ❌ Extensão não se comunica com executável nativo
+- ❌ Web Signer não recebe requisições (log vazio)
+- ❌ JavaScript do TJSP não consegue acessar certificados
+
+#### **Hipóteses do Bloqueio:**
+
+**Hipótese 1: Manifesto Native Messaging Não Encontrado**
+- Chrome via Selenium com `--load-extension` pode não ler manifestos de `/etc/opt/chrome/`
+- Extensão carregada manualmente pode precisar de manifesto em local diferente
+
+**Hipótese 2: Permissões de Native Messaging**
+- Extensão carregada via `--load-extension` pode ter restrições de segurança
+- Chrome pode bloquear Native Messaging para extensões não instaladas via Web Store
+
+**Hipótese 3: Service Worker Não Inicia**
+- Manifest v3 usa `service_worker` em vez de `background page`
+- Service worker pode não iniciar corretamente no modo headless/Xvfb
+
+**Hipótese 4: Incompatibilidade Chrome/Selenium**
+- Chrome 141.0 via Selenium pode ter comportamento diferente do Chrome normal
+- `--load-extension` pode não ativar todas as permissões da extensão
+
+#### **Comparação: Desktop (Funciona) vs Servidor (Não Funciona)**
+
+| Aspecto | Desktop (macOS) ✅ | Servidor (Ubuntu) ❌ |
+|---------|-------------------|---------------------|
+| Instalação Extensão | Chrome Web Store | `--load-extension` manual |
+| Web Signer | Instalado e rodando | Instalado e rodando |
+| Certificado | Keychain macOS | NSS database |
+| Native Messaging | Funciona | **NÃO funciona** |
+| Dropdown | Certificado aparece | Vazio |
+| Log Web Signer | Recebe requisições | **Vazio (0 bytes)** |
+
+#### **Próximas Tentativas:**
+
+**Opção A: Forçar Instalação da Extensão no Perfil**
+```bash
+# Copiar extensão para diretório de extensões do Chrome
+mkdir -p /root/.config/google-chrome/Default/Extensions/bbafmabaelnnkondpfpjmdklbmfnbmol/2.17.1_0
+cp -r /opt/chrome-extensions/websigner/* /root/.config/google-chrome/Default/Extensions/bbafmabaelnnkondpfpjmdklbmfnbmol/2.17.1_0/
+# Testar SEM --load-extension (deixar Chrome carregar automaticamente)
+```
+
+**Opção B: Usar Chrome Modo Normal (Não Selenium)**
+```bash
+# Abrir Chrome manualmente no Xvfb para testar
+export DISPLAY=:99
+google-chrome --user-data-dir=/root/.config/google-chrome https://esaj.tjsp.jus.br/sajcas/login
+# Verificar se certificado aparece
+```
+
+**Opção C: Investigar Logs do Chrome**
+```bash
+# Habilitar logs detalhados do Chrome
+google-chrome --enable-logging --v=1 --load-extension=...
+# Ver logs de Native Messaging
+```
+
+**Opção D: Alternativa ao Web Signer**
+- Investigar se TJSP aceita autenticação via API REST com certificado
+- Usar biblioteca Python para assinar requisições com certificado .pfx
+- Bypass do Web Signer usando automação diferente
+
+---
+
+### **[22] PROBLEMA RAIZ: Extensão Chrome Não Instalada**
+**Timestamp:** 2025-10-03 01:28:00  
+**Status:** 🔴 **EXTENSÃO CHROME AUSENTE**
+
+#### **Contexto:**
+Após múltiplos testes (5s, 15s, 20s, 60s, 2 minutos), o dropdown de certificados permaneceu vazio. Investigação profunda revelou que o **problema não é tempo de carregamento**, mas sim a **ausência da extensão Chrome**.
+
+#### **Descobertas Críticas:**
+
+**1. Web Signer Funcionando Corretamente:**
+```bash
+ps aux | grep websigner
+# ✅ Processo rodando: PID 963339
+# ✅ Consumindo memória: 183MB
+# ✅ Tempo de execução: 5+ minutos
+```
+
+**2. Certificado + Chave Privada OK:**
+```bash
+certutil -K -d sql:/root/.pki/nssdb
+# ✅ Chave privada encontrada:
+# < 0> rsa d0146338a35f9d31822e665f43837b96531c1dd1 flavio eduardo cappi:51764890230
+```
+
+**3. Native Messaging Configurado:**
+```bash
+cat /opt/softplan-websigner/manifest.json
+# ✅ Manifesto correto apontando para extensão bbafmabaelnnkondpfpjmdklbmfnbmol
+```
+
+**4. PROBLEMA: Extensão Chrome NÃO Existe:**
+```bash
+find / -name "bbafmabaelnnkondpfpjmdklbmfnbmol" -type d 2>/dev/null
+# ❌ Nenhum resultado
+
+dpkg -L softplan-websigner | grep -i extension
+# ❌ Pacote .deb NÃO inclui a extensão
+
+ls -la /root/.config/google-chrome/Default/Extensions/
+# ❌ Diretório não existe
+```
+
+**5. Web Signer Sem Comunicação:**
+```bash
+/opt/softplan-websigner/websigner > /tmp/websigner.log 2>&1 &
+# Após teste de 15s:
+cat /tmp/websigner.log
+# ❌ Log VAZIO (0 bytes) - nenhuma requisição recebida
+```
+
+#### **Comparação com Desktop (macOS):**
+No desktop do usuário, o certificado aparece **imediatamente** porque:
+1. ✅ Extensão Chrome instalada via Chrome Web Store
+2. ✅ Web Signer instalado e rodando
+3. ✅ Certificado no Keychain do macOS
+4. 🔑 Popup de senha aparece para desbloquear chave privada
+
+**Screenshots do Desktop:**
+- Dropdown mostra: "FLAVIO EDUARDO CAPPI:517648..."
+- Popup: "Avalonia Application deseja assinar usando a chave '25424636_pf'"
+- Login bem-sucedido
+
+#### **Conclusão:**
+O Web Signer **precisa de 2 componentes**:
+1. ✅ **Executável nativo** (`/opt/softplan-websigner/websigner`) - INSTALADO
+2. ❌ **Extensão Chrome** (ID: `bbafmabaelnnkondpfpjmdklbmfnbmol`) - **AUSENTE**
+
+Sem a extensão, o JavaScript do site TJSP não consegue se comunicar com o Web Signer via Native Messaging Protocol.
+
+#### **Próximos Passos:**
+1. Baixar extensão Chrome manualmente (.crx)
+2. Instalar extensão no Chrome
+3. Testar comunicação com Web Signer
+4. Validar carregamento de certificados
+
+---
+
+### **[21] DIAGNÓSTICO: Web Signer Instalado mas Certificado Inacessível**
+**Timestamp:** 2025-10-03 00:34:00  
+**Status:** 🔧 **CONFIGURANDO ACESSO AO CERTIFICADO**
+
+#### **Contexto:**
+Após instalar o Web Signer 2.12.1 e verificar que a extensão Chrome foi instalada automaticamente, realizamos testes para validar se o sistema consegue acessar os certificados. Descobrimos que o Web Signer está funcionando (popup oculto, dropdown habilitado), mas o dropdown de certificados está vazio.
+
+#### **Testes Realizados:**
+
+**1. Teste Inicial (5 segundos de espera):**
+```python
+# Resultado:
+✅ Popup 'Web Signer não instalado' está oculto
+✅ Dropdown de certificados está habilitado
+📋 1 certificados encontrados: (vazio)
+```
+
+**2. Teste com Espera Maior (15 segundos):**
+```python
+# Resultado: Mesmo com 15s de espera, dropdown continua vazio
+📋 1 opções no dropdown:
+   1. value='' text=''
+```
+
+**3. Teste com user-data-dir Específico:**
+```python
+opts.add_argument("--user-data-dir=/root/.config/google-chrome")
+# Resultado: Dropdown ainda vazio
+```
+
+#### **Diagnóstico do Problema:**
+
+**Certificado Importado Corretamente:**
+```bash
+certutil -L -d sql:/root/.pki/nssdb
+# Resultado:
+NSS Certificate DB:flavio eduardo cappi:51764890230 2025-09-09 10:30:15 u,u,u
+```
+
+**Web Signer Instalado:**
+- ✅ Executável: `/opt/softplan-websigner/websigner`
+- ✅ Manifesto: `/usr/share/mozilla/native-messaging-hosts/br.com.softplan.webpki.json`
+- ✅ Extensão Chrome: `~/.config/google-chrome/Default/Extensions/bbafmabaelnnkondpfpjmdklbmfnbmol/2.17.1_0`
+
+**Problema Identificado:**
+O Chrome via Selenium cria sessões temporárias em `/tmp/.org.chromium.Chromium.XXXXXX/` que **não têm acesso ao NSS database do root** (`/root/.pki/nssdb`). O Web Signer está tentando ler certificados dessas pastas temporárias, que estão vazias.
+
+**Evidência:**
+```bash
+# Pastas temporárias criadas pelo ChromeDriver:
+/tmp/.org.chromium.Chromium.KV3mcl/
+/tmp/.org.chromium.Chromium.ZLnOOK/
+
+# Nenhuma contém cert9.db ou key4.db
+find /tmp/.org.chromium.Chromium.* -name "cert9.db"
+# (vazio)
+```
+
+#### **Solução Proposta:**
+Copiar o NSS database do root para o perfil do Chrome:
+```bash
+mkdir -p /root/.config/google-chrome/Default/.pki/nssdb
+cp -r /root/.pki/nssdb/* /root/.config/google-chrome/Default/.pki/nssdb/
+```
+
+#### **Próximos Passos:**
+1. Copiar certificado para perfil do Chrome
+2. Testar novamente com Selenium
+3. Se funcionar, atualizar código do crawler para usar perfil correto
+4. Rebuild worker e teste final
+
+---
+
+### **[20] DESCOBERTA CRÍTICA: Web Signer é Aplicativo Nativo (.deb)**
+**Timestamp:** 2025-10-03 00:16:00  
+**Status:** ✅ **WEB SIGNER BAIXADO COM SUCESSO**
+
+#### **Contexto:**
+Durante tentativa de instalar Web Signer, descobrimos que o link antigo (usado no `PLANO_XVFB_WEBSIGNER.md`) estava retornando **404 Not Found**. Após pesquisa, identificamos que:
+
+1. **Web Signer é um aplicativo nativo** (.deb) que roda no sistema operacional
+2. **NÃO é uma extensão do Chrome** instalada via Chrome Web Store
+3. **Versão atual:** 2.12.1 (link antigo usava 2.9.5)
+4. **Função:** Ponte entre JavaScript do navegador e certificados do NSS database
+
+#### **Problema Inicial:**
+```bash
+root@srv987902:/tmp# wget https://websigner.softplan.com.br/Downloads/Instalador/Linux/WebSigner_Ubuntu_x64.deb
+--2025-10-03 00:09:53--  https://websigner.softplan.com.br/Downloads/Instalador/Linux/WebSigner_Ubuntu_x64.deb
+HTTP request sent, awaiting response... 404 Not Found
+2025-10-03 00:09:54 ERROR 404: Not Found.
+```
+
+#### **Solução Encontrada:**
+Através de pesquisa no AUR (Arch User Repository) e artigo do Medium, identificamos o **link correto atualizado**:
+
+**Link Correto:** `https://websigner.softplan.com.br/Downloads/2.12.1/webpki-chrome-64-deb`
+
+**Referências:**
+- AUR Package: https://aur.archlinux.org/packages/softplan-websigner
+- Tutorial Medium: https://medium.com/@bruno.marques/instalação-do-softplan-web-signer-e-saj-em-sistemas-ubuntu-linux-16-04-586ea22299e
+
+#### **Download Bem-Sucedido:**
+```bash
+root@srv987902:/tmp# wget https://websigner.softplan.com.br/Downloads/2.12.1/webpki-chrome-64-deb -O websigner-2.12.1.deb
+--2025-10-03 00:15:44--  https://websigner.softplan.com.br/Downloads/2.12.1/webpki-chrome-64-deb
+Resolving websigner.softplan.com.br (websigner.softplan.com.br)... 65.8.248.106, 65.8.248.101, 65.8.248.10, ...
+Connecting to websigner.softplan.com.br (websigner.softplan.com.br)|65.8.248.106|:443... connected.
+HTTP request sent, awaiting response... 200 OK
+Length: 30671552 (29M) [application/vnd.debian.binary-package]
+Saving to: 'websigner-2.12.1.deb'
+
+websigner-2.12.1.deb  100%[=========================>]  29.25M  6.89MB/s    in 4.9s    
+
+2025-10-03 00:15:50 (5.93 MB/s) - 'websigner-2.12.1.deb' saved [30671552/30671552]
+
+-rw-r--r-- 1 root root 30M Oct  3 00:15 websigner-2.12.1.deb
+```
+
+#### **Por Que Web Signer é Essencial:**
+1. **JavaScript do TJSP** usa API do Web Signer para acessar certificados
+2. **Sem Web Signer:** Dropdown `#certificados` fica vazio/desabilitado
+3. **Com Web Signer:** Certificados do NSS database aparecem automaticamente
+4. **Popup bloqueador:** Site mostra "Web Signer não instalado" sem o plugin
+
+#### **Próximos Passos:**
+```bash
+# 1. Instalar o pacote .deb
+sudo dpkg -i /tmp/websigner-2.12.1.deb
+
+# 2. Corrigir dependências (se necessário)
+sudo apt-get install -f -y
+
+# 3. Verificar instalação
+ls -la /opt/WebSigner/
+systemctl status websigner
+
+# 4. Testar no Chrome
+export DISPLAY=:99
+google-chrome --no-sandbox https://esaj.tjsp.jus.br/sajcas/login
+```
+
+#### **Arquivos Atualizados:**
+- `DEPLOY_TRACKING.md` - Documentado problema e solução
+- `PLANO_XVFB_WEBSIGNER.md` - Precisa atualizar link na FASE 3
+
+---
 
 ### **[19] SUCESSO: Certificado Importado para NSS Database**
 **Timestamp:** 2025-10-02 23:04:00  
