@@ -10,17 +10,20 @@
 
 ## 🎯 STATUS ATUAL
 
-**Última Atualização:** 2025-10-03 21:50:00  
-**Status:** 🟢 **SUCESSO - Solução WebSocket Funcionando 100%!**
+**Última Atualização:** 2025-10-03 23:47:00  
+**Status:** 🟡 **EM ANÁLISE - Remote Debugging Parcialmente Funcional**
 
 **Resumo Executivo:**
 - ✅ Xvfb instalado e rodando (display :99) como usuário `crawler`
-- ✅ ChromeDriver instalado e rodando (porta 4444) como usuário `crawler`
+- ✅ ChromeDriver instalado (/usr/local/bin/chromedriver)
 - ✅ Certificado A1 importado e funcionando
-- ✅ **Servidor WebSocket Python** rodando (porta 8765)
-- ✅ **Extensão Chrome customizada** instalada e funcionando
-- ✅ **LOGIN NO e-SAJ REALIZADO COM SUCESSO!** 🎉
-- 🔄 **PRÓXIMO:** Integração com Selenium
+- ✅ **Servidor WebSocket Python** rodando (porta 8765) via systemd
+- ✅ **Extensão Chrome customizada** criada e testada
+- ✅ **LOGIN MANUAL via RDP** funcionou com extensão customizada
+- ✅ **Chrome com Remote Debugging** (porta 9222) funcionando
+- ✅ **Selenium conecta ao Chrome** via remote debugging
+- ❌ **Extensão não conecta ao WebSocket** em modo automatizado
+- 🔄 **PRÓXIMO:** Avaliar Windows Server como alternativa
 
 **Arquitetura WebSocket (COMPROVADA):**
 ```
@@ -65,6 +68,78 @@ VPS Ubuntu (srv987902):
 ---
 
 ## 📝 HISTÓRICO DE MUDANÇAS
+
+### **[30] Teste Remote Debugging - Parcialmente Funcional**
+**Timestamp:** 2025-10-03 23:47:00  
+**Status:** 🟡 **PROGRESSO - Selenium Conecta Mas Extensão Não Funciona**
+
+#### **Implementação Remote Debugging:**
+
+**1. Scripts Criados:**
+- `start_chrome_debug.sh` - Inicia Chrome com `--remote-debugging-port=9222`
+- `test_selenium_remote_debug.py` - Teste Selenium via remote debugging
+- Serviço systemd: `websocket-cert.service` (rodando)
+
+**2. Testes Realizados:**
+- ✅ Chrome inicia com remote debugging (porta 9222)
+- ✅ Selenium conecta ao Chrome via `debuggerAddress`
+- ✅ Extensão customizada carrega (ID: bbafmabaelnnkondpfpjmdklbmfnbmol)
+- ✅ Servidor WebSocket funcionando (porta 8765)
+- ✅ Teste manual via RDP: **Login bem-sucedido!**
+- ❌ Teste automatizado: Extensão não conecta ao WebSocket
+
+#### **Descobertas:**
+
+**Funciona:**
+```
+✅ Login manual via RDP com extensão customizada
+✅ Servidor WebSocket responde corretamente
+✅ Certificado detectado no dropdown (manual)
+✅ Popup de autorização aparece (manual)
+✅ Login realizado com sucesso (manual)
+```
+
+**Não Funciona:**
+```
+❌ Extensão em modo automatizado não conecta ao WebSocket
+❌ window.WebSigner existe mas não popula dropdown
+❌ Certificado não aparece via Selenium
+```
+
+#### **Análise Técnica:**
+
+**Possíveis Causas:**
+1. Content Security Policy (CSP) bloqueia WebSocket em modo automatizado
+2. Timing: Extensão carrega mas WebSocket não conecta a tempo
+3. Permissões diferentes entre modo manual e automatizado
+4. Chrome detecta automação e aplica restrições adicionais
+
+**Evidências:**
+- Extensão carrega: Service Worker detectado no DevTools
+- API existe: `window.WebSigner` retorna `true`
+- Métodos disponíveis: `['listCertificates', 'sign', 'isAvailable', 'getVersion']`
+- Mas dropdown permanece vazio
+
+#### **Arquivos Criados:**
+- `start_chrome_debug.sh` - Script para iniciar Chrome com debugging
+- `test_selenium_remote_debug.py` - Teste via remote debugging
+- `websocket-cert.service` - Serviço systemd para servidor WebSocket
+
+#### **Screenshots:**
+- `rdebug_01_inicial.png` - Página inicial e-SAJ
+- `rdebug_02_aba_cert.png` - Aba certificado (dropdown vazio)
+
+#### **Próximos Passos:**
+1. ⏸️ Investigar CSP e permissões (2-4 horas)
+2. 🔄 **Avaliar Windows Server** como alternativa
+3. ⏸️ Considerar empacotar extensão (.crx assinado)
+
+#### **Decisão:**
+- Documentar progresso atual
+- Explorar opção Windows Server
+- Avaliar custo-benefício antes de continuar debugging
+
+---
 
 ### **[29] SUCESSO: Solução WebSocket Funcionando 100%!**
 **Timestamp:** 2025-10-03 21:50:00  
