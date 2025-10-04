@@ -52,6 +52,13 @@ certs/*.p12
 certs/*.pem
 certs/*.key
 
+# Credenciais (SENSÍVEL - NUNCA COMMITAR)
+**/CREDENTIALS.md
+**/credentials.md
+CREDENTIALS.txt
+credentials.txt
+**/EXECUTION_LOG.md
+
 # Logs
 *.log
 logs/
