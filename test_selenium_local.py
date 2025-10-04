@@ -38,7 +38,7 @@ def test_selenium_local():
     os.environ['DISPLAY'] = ':99'
     
     # Criar serviço do ChromeDriver
-    service = Service('/usr/bin/chromedriver')
+    service = Service('/usr/local/bin/chromedriver')
     
     print(f"\n[1] Iniciando ChromeDriver LOCAL")
     print(f"    Display: {os.environ.get('DISPLAY')}")
