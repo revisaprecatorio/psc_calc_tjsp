@@ -1,0 +1,20 @@
+[Unit]
+Description=WebSocket Certificate Server for e-SAJ
+After=network.target
+
+[Service]
+Type=simple
+User=crawler
+Group=crawler
+WorkingDirectory=/opt/crawler_tjsp
+ExecStart=/usr/bin/python3 /opt/crawler_tjsp/websocket_cert_server.py /opt/crawler_tjsp/certificado.pfx 903205
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Limites de recursos
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
