@@ -26,6 +26,8 @@ echo ""
 DISPLAY=:99 /usr/bin/google-chrome \
     --remote-debugging-port=9222 \
     --user-data-dir=/home/crawler/.config/google-chrome \
+    --no-sandbox \
+    --disable-dev-shm-usage \
     --no-first-run \
     --no-default-browser-check \
     --disable-popup-blocking \
