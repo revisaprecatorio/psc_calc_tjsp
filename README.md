@@ -1,294 +1,203 @@
-# Crawler TJSP - Sistema de Consulta de Requisitórios
+# 🏛️ Crawler TJSP - Sistema de Consulta de Precatórios
 
-Sistema automatizado para consulta e download de documentos de processos judiciais (Precatórios) no portal ESAJ do Tribunal de Justiça de São Paulo (TJSP).
+Sistema automatizado para consulta e download de documentos de processos judiciais (Precatórios) no portal e-SAJ do Tribunal de Justiça de São Paulo (TJSP).
+
+[![Status](https://img.shields.io/badge/status-bloqueado-red)]()
+[![Python](https://img.shields.io/badge/python-3.12+-blue)]()
+[![Selenium](https://img.shields.io/badge/selenium-4.25-green)]()
+[![License](https://img.shields.io/badge/license-proprietary-orange)]()
+
+---
+
+## ⚠️ **STATUS ATUAL**
+
+🔴 **PROJETO BLOQUEADO** - Requer decisão estratégica
+
+O projeto está **tecnicamente funcional** mas **bloqueado** por limitação do Native Messaging Protocol em ambiente headless Linux. Veja [DIAGNOSTIC_REPORT.md](DIAGNOSTIC_REPORT.md) para análise completa e alternativas.
+
+**Última atualização:** 2025-10-04
+**Iterações de deploy:** 30
+**Próximo passo:** Migração para Windows Server (recomendado)
+
+---
 
 ## 📋 Índice
 
 - [Visão Geral](#-visão-geral)
-- [Arquitetura do Sistema](#-arquitetura-do-sistema)
-- [Componentes Principais](#-componentes-principais)
-- [Fluxo de Execução](#-fluxo-de-execução)
+- [Status do Projeto](#-status-do-projeto)
+- [Arquitetura](#-arquitetura)
 - [Funcionalidades](#-funcionalidades)
 - [Requisitos](#-requisitos)
-- [Configuração](#-configuração)
-- [Deploy](#-deploy)
+- [Instalação](#-instalação)
 - [Uso](#-uso)
-- [Estrutura de Dados](#-estrutura-de-dados)
+- [Documentação](#-documentação)
 - [Troubleshooting](#-troubleshooting)
+- [Roadmap](#-roadmap)
 
 ---
 
 ## 🎯 Visão Geral
 
-O **Crawler TJSP** é um sistema de automação web que realiza consultas no portal ESAJ (e-SAJ) do TJSP, extrai informações de processos judiciais e faz download de documentos PDF da Pasta Digital. O sistema é composto por dois componentes principais:
+O **Crawler TJSP** automatiza o processo de:
+1. Autenticação no e-SAJ via certificado digital A1
+2. Busca de processos por CPF/CNPJ ou número CNJ
+3. Extração de metadados processuais
+4. Download de PDFs da Pasta Digital
+5. Gerenciamento de filas via PostgreSQL
 
-1. **crawler_full.py** - Motor de automação web (Selenium)
-2. **orchestrator_subprocess.py** - Orquestrador de tarefas e gerenciador de filas
+### Componentes Principais
+
+```
+┌─────────────────────────────────────────────────┐
+│  crawler_full.py (Selenium WebDriver)           │
+│  └─ Automação de navegação e download           │
+└──────────────────┬──────────────────────────────┘
+                   │
+┌──────────────────▼──────────────────────────────┐
+│  orchestrator_subprocess.py (Worker)            │
+│  └─ Gerencia filas e executa crawler            │
+└──────────────────┬──────────────────────────────┘
+                   │
+┌──────────────────▼──────────────────────────────┐
+│  PostgreSQL Database                             │
+│  └─ Tabela: consultas_esaj                      │
+└─────────────────────────────────────────────────┘
+```
 
 ### Casos de Uso
 
-- Consulta de processos por **CPF/CNPJ** (Documento da Parte)
-- Consulta de processos por **Número CNJ** (formato: 0000000-00.0000.0.00.0000)
-- Download automático de PDFs da Pasta Digital
-- Processamento em lote de múltiplos processos
-- Integração com banco de dados PostgreSQL para gerenciamento de filas
+- ✅ Consulta de processos por **CPF/CNPJ**
+- ✅ Consulta por **Número CNJ** (formato: 0000000-00.0000.0.00.0000)
+- ✅ Download automático de PDFs
+- ✅ Processamento em lote
+- ✅ Modo TURBO (download acelerado)
+- ✅ Fallback HTTP para downloads
 
 ---
 
-## 🏗️ Arquitetura do Sistema
+## 🚨 Status do Projeto
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    PostgreSQL Database                       │
-│                   (Tabela: consultas_esaj)                  │
-│  ┌────────────────────────────────────────────────────┐    │
-│  │ id | cpf | processos | status | created_at        │    │
-│  └────────────────────────────────────────────────────┘    │
-└──────────────────────┬──────────────────────────────────────┘
-                       │
-                       ▼
-┌─────────────────────────────────────────────────────────────┐
-│           orchestrator_subprocess.py (Worker)               │
-│  ┌──────────────────────────────────────────────────┐      │
-│  │  1. Busca próximo job não processado (status=false)│    │
-│  │  2. Extrai lista de precatórios                   │    │
-│  │  3. Para cada precatório:                         │    │
-│  │     └─> Executa crawler_full.py via subprocess    │    │
-│  │  4. Atualiza status=true após conclusão           │    │
-│  │  5. Loop contínuo (worker daemon)                 │    │
-│  └──────────────────────────────────────────────────┘      │
-└──────────────────────┬──────────────────────────────────────┘
-                       │
-                       ▼
-┌─────────────────────────────────────────────────────────────┐
-│              crawler_full.py (Selenium Bot)                 │
-│  ┌──────────────────────────────────────────────────┐      │
-│  │  1. Inicializa Chrome (com perfil/certificado)   │      │
-│  │  2. Acessa ESAJ TJSP                              │      │
-│  │  3. Login CAS (certificado digital ou CPF/senha)  │      │
-│  │  4. Realiza consulta (por CPF ou Número CNJ)      │      │
-│  │  5. Extrai dados do processo                      │      │
-│  │  6. Abre Pasta Digital                            │      │
-│  │  7. Seleciona documentos na árvore (jstree)       │      │
-│  │  8. Baixa PDF (modo TURBO ou normal)              │      │
-│  │  9. Retorna JSON com resultados                   │      │
-│  └──────────────────────────────────────────────────┘      │
-└──────────────────────┬──────────────────────────────────────┘
-                       │
-                       ▼
-┌─────────────────────────────────────────────────────────────┐
-│                  Arquivos de Saída                          │
-│  ┌──────────────────────────────────────────────────┐      │
-│  │  downloads/{cpf}/                                 │      │
-│  │    └─> processo_XXXXXX.pdf                        │      │
-│  │  screenshots/                                     │      │
-│  │    └─> screenshot_*.png                           │      │
-│  │    └─> erro_*.html, erro_*.png                    │      │
-│  └──────────────────────────────────────────────────┘      │
-└─────────────────────────────────────────────────────────────┘
-```
+### Situação Atual
+
+| Componente | Status | Observação |
+|------------|--------|------------|
+| **Código Crawler** | ✅ Funcional | Testado e validado |
+| **Orquestrador** | ✅ Funcional | Worker daemon operacional |
+| **PostgreSQL** | ✅ Funcional | Integração completa |
+| **Xvfb + ChromeDriver** | ✅ Configurado | Display virtual funcionando |
+| **Certificado A1** | ✅ Importado | NSS database configurado |
+| **Web Signer** | ❌ **BLOQUEADO** | Native Messaging não funciona |
+| **Autenticação e-SAJ** | ❌ **BLOQUEADO** | Dependente do Web Signer |
+
+### Problema Técnico
+
+**Native Messaging Protocol não funciona em Linux headless via Selenium.**
+
+Mesmo com todas as configurações corretas:
+- ✅ Extensão Chrome carregada
+- ✅ Web Signer instalado e rodando
+- ✅ Certificado importado no NSS database
+- ✅ Manifesto configurado
+
+A comunicação entre extensão e executável nativo **NUNCA ocorre** quando Chrome é controlado via ChromeDriver.
+
+**Detalhes:** Veja análise técnica completa em [DIAGNOSTIC_REPORT.md](DIAGNOSTIC_REPORT.md)
+
+### Soluções Propostas
+
+| Solução | Confiabilidade | Custo/mês | Tempo Setup | Recomendação |
+|---------|---------------|-----------|-------------|--------------|
+| **Windows Server** | ⭐⭐⭐⭐⭐ | $9-30 | 3-4h | **✅ RECOMENDADO** |
+| **Legal Wizard** | ⭐⭐⭐⭐⭐ | R$50-200 | Imediato | ✅ Alternativa |
+| **Ubuntu + XFCE** | ⭐⭐ | $5-20 | 6-8h | ⚠️ Risco alto |
+| **Debug WebSocket** | ⭐⭐ | $5-20 | 40-80h | ❌ Não recomendado |
+
+**Decisão recomendada:** Migrar para **Windows Server EC2** (AWS).
 
 ---
 
-## 🧩 Componentes Principais
+## 🏗️ Arquitetura
 
-### 1. **crawler_full.py**
-
-Motor principal de automação web usando Selenium WebDriver.
-
-#### Responsabilidades:
-- Gerenciamento do navegador Chrome (headless ou com interface)
-- Autenticação no sistema ESAJ (CAS Login)
-- Navegação e extração de dados
-- Download de PDFs da Pasta Digital
-- Tratamento de erros e fallbacks
-
-#### Principais Funções:
-
-| Função | Descrição |
-|--------|-----------|
-| `_build_chrome()` | Configura e inicializa o Chrome com perfil e certificados |
-| `_maybe_cas_login()` | Realiza login via certificado digital ou CPF/senha |
-| `_select_criterio_documento()` | Seleciona critério "Documento da Parte" |
-| `_select_criterio_processo()` | Seleciona critério "Número do Processo" (CNJ) |
-| `_submit_consulta()` | Envia formulário de consulta |
-| `_extract_details_from_detail_page()` | Extrai dados do processo (classe, assunto, vara, etc.) |
-| `_open_pasta_digital()` | Abre a Pasta Digital do processo |
-| `_ensure_some_selected()` | Seleciona documentos na árvore jstree |
-| `_baixar_todos_pasta_digital()` | Orquestra download de PDFs (modo TURBO ou normal) |
-| `go_and_extract()` | Função principal que executa todo o fluxo |
-
-#### Modos de Operação:
-
-**Modo Normal:**
-- Aguarda carregamento completo da árvore de documentos
-- Seleção manual via interface
-- Timeout padrão: 240 segundos
-
-**Modo TURBO (`--turbo-download`):**
-- Seleção automática via JavaScript
-- Não aguarda renderização completa da árvore
-- Fallback automático se árvore demorar > 12s
-- Timeout reduzido: 120 segundos
-- Ideal para processos com muitos documentos
-
-### 2. **orchestrator_subprocess.py**
-
-Orquestrador de tarefas que gerencia a fila de processamento.
-
-#### Responsabilidades:
-- Conexão com PostgreSQL
-- Busca de jobs pendentes (`status=false`)
-- Execução de subprocessos (crawler_full.py)
-- Atualização de status no banco
-- Loop contínuo (worker daemon)
-
-#### Fluxo de Execução:
-
-```python
-while True:
-    1. Buscar próximo job (status=false)
-    2. Se não houver jobs: break
-    3. Para cada precatório no job:
-       a. Executar crawler_full.py
-       b. Capturar output JSON
-       c. Tratar erros
-    4. Se todos sucesso: UPDATE status=true
-    5. Repetir
-```
-
-#### Variáveis de Ambiente Necessárias:
-
-```bash
-DB_HOST=<host_do_banco>
-DB_PORT=5432
-DB_NAME=<nome_do_banco>
-DB_USER=<usuario>
-DB_PASSWORD=<senha>
-CHROME_USER_DATA_DIR=<caminho_do_perfil_chrome>
-```
-
----
-
-## 🔄 Fluxo de Execução
-
-### Fluxo Completo (Passo a Passo)
+### Diagrama Completo
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│ INÍCIO: orchestrator_subprocess.py                          │
-└──────────────────────┬──────────────────────────────────────┘
-                       │
-                       ▼
-┌─────────────────────────────────────────────────────────────┐
-│ 1. BUSCA NO BANCO DE DADOS                                  │
-│    SELECT id, cpf, processos FROM consultas_esaj            │
-│    WHERE status='false' ORDER BY id LIMIT 1                 │
-└──────────────────────┬──────────────────────────────────────┘
-                       │
-                       ▼
-┌─────────────────────────────────────────────────────────────┐
-│ 2. PROCESSAMENTO DO JOB                                     │
-│    Para cada processo na lista:                             │
-│    ┌────────────────────────────────────────────────┐      │
-│    │ a. Extrai CPF e Número do Processo             │      │
-│    │ b. Monta comando:                               │      │
-│    │    python crawler_full.py --doc {numero}       │      │
-│    │           --abrir-autos --baixar-pdf           │      │
-│    │           --turbo-download                      │      │
-│    │           --download-dir downloads/{cpf}        │      │
-│    │           --user-data-dir {perfil_chrome}      │      │
-│    │ c. Executa subprocess                           │      │
-│    └────────────────────────────────────────────────┘      │
-└──────────────────────┬──────────────────────────────────────┘
-                       │
-                       ▼
-┌─────────────────────────────────────────────────────────────┐
-│ 3. CRAWLER EXECUTA (crawler_full.py)                        │
-│    ┌────────────────────────────────────────────────┐      │
-│    │ 3.1. Inicializa Chrome                         │      │
-│    │      - Carrega perfil do usuário               │      │
-│    │      - Configura download automático           │      │
-│    │      - Modo headless (opcional)                │      │
-│    └────────────────────────────────────────────────┘      │
-│    ┌────────────────────────────────────────────────┐      │
-│    │ 3.2. Acessa ESAJ                               │      │
-│    │      URL: https://esaj.tjsp.jus.br/cpopg/      │
-│    │           abrirConsultaDeRequisitorios.do      │      │
-│    └────────────────────────────────────────────────┘      │
-│    ┌────────────────────────────────────────────────┐      │
-│    │ 3.3. Login CAS                                 │      │
-│    │      - Tenta certificado digital (se config.)  │      │
-│    │      - Fallback: CPF/senha (se fornecido)      │      │
-│    └────────────────────────────────────────────────┘      │
-│    ┌────────────────────────────────────────────────┐      │
-│    │ 3.4. Seleciona Critério de Busca              │      │
-│    │      - Se CPF: "Documento da Parte"            │      │
-│    │      - Se CNJ: "Número do Processo"            │      │
-│    └────────────────────────────────────────────────┘      │
-│    ┌────────────────────────────────────────────────┐      │
-│    │ 3.5. Preenche Formulário                       │      │
-│    │      - Insere CPF ou Número CNJ                │      │
-│    │      - Dispara consulta                        │      │
-│    └────────────────────────────────────────────────┘      │
-│    ┌────────────────────────────────────────────────┐      │
-│    │ 3.6. Aguarda Resultado                         │      │
-│    │      - Detecta tipo: LISTA ou DETALHE          │      │
-│    │      - Timeout: 60 segundos                    │      │
-│    └────────────────────────────────────────────────┘      │
-│    ┌────────────────────────────────────────────────┐      │
-│    │ 3.7. Extrai Dados do Processo                  │      │
-│    │      - Número do processo                      │      │
-│    │      - Classe (verifica se é Precatório)       │      │
-│    │      - Assunto, Foro, Vara, Juiz               │      │
-│    │      - Link da Pasta Digital                   │      │
-│    └────────────────────────────────────────────────┘      │
-│    ┌────────────────────────────────────────────────┐      │
-│    │ 3.8. Abre Pasta Digital (se --abrir-autos)    │      │
-│    │      - Navega para link da Pasta Digital       │      │
-│    │      - Aguarda carregamento da árvore          │      │
-│    └────────────────────────────────────────────────┘      │
-│    ┌────────────────────────────────────────────────┐      │
-│    │ 3.9. Seleciona Documentos                      │      │
-│    │      - Entra no iframe da árvore               │      │
-│    │      - Clica "Todas" ou expande jstree         │      │
-│    │      - Modo TURBO: seleção via JavaScript      │      │
-│    └────────────────────────────────────────────────┘      │
-│    ┌────────────────────────────────────────────────┐      │
-│    │ 3.10. Baixa PDF (se --baixar-pdf)             │      │
-│    │       - Clica botão "Salvar"                   │      │
-│    │       - Trata modal "Arquivo único/múltiplo"   │      │
-│    │       - Aguarda download (120-300s)            │      │
-│    │       - Fallback HTTP se Chrome falhar         │      │
-│    └────────────────────────────────────────────────┘      │
-│    ┌────────────────────────────────────────────────┐      │
-│    │ 3.11. Captura Screenshot                       │      │
-│    │       - Salva em screenshots/                  │      │
-│    └────────────────────────────────────────────────┘      │
-│    ┌────────────────────────────────────────────────┐      │
-│    │ 3.12. Retorna JSON                             │      │
-│    │       {                                         │      │
-│    │         "ok": true,                            │      │
-│    │         "has_precatorio": true,                │      │
-│    │         "results": [...],                      │      │
-│    │         "downloaded_files": [...]              │      │
-│    │       }                                         │      │
-│    └────────────────────────────────────────────────┘      │
-└──────────────────────┬──────────────────────────────────────┘
-                       │
-                       ▼
-┌─────────────────────────────────────────────────────────────┐
-│ 4. ATUALIZAÇÃO DO STATUS                                    │
-│    Se todos os subprocessos foram bem-sucedidos:            │
-│    UPDATE consultas_esaj SET status=true WHERE id={job_id}  │
-└──────────────────────┬──────────────────────────────────────┘
-                       │
-                       ▼
-┌─────────────────────────────────────────────────────────────┐
-│ 5. LOOP CONTÍNUO                                            │
-│    Volta para o passo 1 (busca próximo job)                 │
-│    Se não houver mais jobs: encerra                         │
-└─────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────┐
+│                PostgreSQL Database                      │
+│              (consultas_esaj table)                     │
+└───────────────────────┬────────────────────────────────┘
+                        │ SELECT status=false
+                        ▼
+┌────────────────────────────────────────────────────────┐
+│          orchestrator_subprocess.py                     │
+│  ┌────────────────────────────────────────────────┐   │
+│  │ 1. Busca jobs pendentes no banco               │   │
+│  │ 2. Para cada processo na fila:                 │   │
+│  │    └─> Executa: python crawler_full.py         │   │
+│  │ 3. Atualiza status=true após sucesso           │   │
+│  │ 4. Loop contínuo (daemon)                      │   │
+│  └────────────────────────────────────────────────┘   │
+└───────────────────────┬────────────────────────────────┘
+                        │ subprocess.run(crawler_full.py)
+                        ▼
+┌────────────────────────────────────────────────────────┐
+│                crawler_full.py                          │
+│  ┌────────────────────────────────────────────────┐   │
+│  │ 1. Inicializa Chrome (Selenium)                │   │
+│  │ 2. Acessa e-SAJ (https://esaj.tjsp.jus.br)     │   │
+│  │ 3. Autenticação CAS:                           │   │
+│  │    └─> Certificado digital A1 (PRIORIDADE)    │   │
+│  │    └─> CPF/Senha (fallback)                    │   │
+│  │ 4. Preenche formulário de consulta             │   │
+│  │ 5. Aguarda resultado (lista ou detalhe)        │   │
+│  │ 6. Extrai metadados do processo                │   │
+│  │ 7. Abre Pasta Digital (se --abrir-autos)       │   │
+│  │ 8. Seleciona documentos (jstree)               │   │
+│  │ 9. Baixa PDF (se --baixar-pdf):                │   │
+│  │    └─> Modo TURBO (via JavaScript)             │   │
+│  │    └─> Modo Normal (aguarda árvore)            │   │
+│  │    └─> Fallback HTTP (se Chrome falhar)        │   │
+│  │ 10. Retorna JSON com resultados                │   │
+│  └────────────────────────────────────────────────┘   │
+└───────────────────────┬────────────────────────────────┘
+                        │
+                        ▼
+┌────────────────────────────────────────────────────────┐
+│                  Saída de Dados                         │
+│  ┌────────────────────────────────────────────────┐   │
+│  │ downloads/{cpf}/processo_*.pdf                 │   │
+│  │ screenshots/screenshot_*.png                   │   │
+│  │ screenshots/erro_*.html, erro_*.png            │   │
+│  │ STDOUT: JSON com metadados                     │   │
+│  └────────────────────────────────────────────────┘   │
+└────────────────────────────────────────────────────────┘
+```
+
+### Arquitetura Atual (Linux - BLOQUEADA)
+
+```
+VPS Ubuntu 24.04 (srv987902)
+├── Xvfb :99 (Display Virtual)
+├── ChromeDriver :4444 (Standalone)
+├── Web Signer 2.12.1 (Instalado mas NÃO funciona)
+├── Certificado A1 (Importado no NSS database)
+├── Worker Docker (network_mode: host)
+└── PostgreSQL (Externo: 72.60.62.124)
+
+⚠️ BLOQUEIO: Native Messaging não funciona via Selenium
+```
+
+### Arquitetura Proposta (Windows - RECOMENDADA)
+
+```
+AWS EC2 Windows Server 2019/2022
+├── Chrome (GUI)
+├── Web Signer 2.12.1 (Funciona nativamente)
+├── Certificado A1 (Importado via certmgr.msc)
+├── Python 3.12 + Selenium
+├── Worker (Task Scheduler ou NSSM)
+└── PostgreSQL (Local ou remoto)
+
+✅ FUNCIONA: Native Messaging 100% operacional
 ```
 
 ---
@@ -297,50 +206,46 @@ CHROME_USER_DATA_DIR=<caminho_do_perfil_chrome>
 
 ### Consulta de Processos
 
-- ✅ **Por CPF/CNPJ**: Consulta todos os processos de uma pessoa/empresa
-- ✅ **Por Número CNJ**: Consulta processo específico (formato: 0000000-00.0000.0.00.0000)
-- ✅ **Detecção automática**: Identifica se input é CPF ou CNJ
-- ✅ **Paginação**: Navega automaticamente por múltiplas páginas de resultados
-- ✅ **Filtro de Precatórios**: Identifica e processa apenas processos da classe "Precatório"
+- ✅ **Por CPF/CNPJ:** Busca todos os processos de uma pessoa/empresa
+- ✅ **Por Número CNJ:** Consulta processo específico
+- ✅ **Detecção automática:** Identifica tipo de input (CPF vs CNJ)
+- ✅ **Paginação:** Navega múltiplas páginas de resultados
+- ✅ **Filtro:** Processa apenas processos da classe "Precatório"
 
 ### Autenticação
 
-- ✅ **Certificado Digital**: Auto-seleção via políticas do Chrome
-- ✅ **CPF/Senha**: Fallback para login tradicional
-- ✅ **Perfil do Chrome**: Reutiliza sessões e certificados salvos
+- ✅ **Certificado Digital:** Auto-seleção via políticas do Chrome
+- ✅ **CPF/Senha:** Fallback para login tradicional
+- ✅ **Perfil do Chrome:** Reutiliza sessões e certificados salvos
 
 ### Download de PDFs
 
-- ✅ **Modo TURBO**: Seleção e download acelerados via JavaScript
-- ✅ **Modo Normal**: Aguarda carregamento completo da interface
-- ✅ **Fallback Automático**: Se modo normal falhar, tenta TURBO
-- ✅ **Fallback HTTP**: Se download do Chrome falhar, usa requests com cookies
-- ✅ **Tratamento de Alertas**: Detecta e resolve alerta "Selecione pelo menos um item"
-- ✅ **Arquivo Único**: Gera PDF consolidado de todos os documentos
+- ✅ **Modo TURBO:** Seleção e download acelerados via JavaScript
+- ✅ **Modo Normal:** Aguarda carregamento completo da interface
+- ✅ **Fallback Automático:** Se normal falhar, tenta TURBO
+- ✅ **Fallback HTTP:** Se Chrome falhar, usa requests com cookies
+- ✅ **Tratamento de Alertas:** Detecta "Selecione pelo menos um item"
+- ✅ **Arquivo Único:** PDF consolidado de todos os documentos
 
 ### Robustez
 
-- ✅ **Retry Automático**: Múltiplas tentativas em caso de falha
-- ✅ **Tratamento de Erros**: Captura screenshots e HTML em caso de erro
-- ✅ **Métricas**: Registra tempo de execução (started_at, finished_at, duration)
-- ✅ **Limpeza**: Fecha abas criadas e encerra Chrome ao final
-- ✅ **Headless Mode**: Execução sem interface gráfica (ideal para servidores)
-
-### Integração
-
-- ✅ **PostgreSQL**: Gerenciamento de filas de processamento
-- ✅ **Docker**: Containerização completa
-- ✅ **Worker Daemon**: Processamento contínuo em background
-- ✅ **Output JSON**: Estrutura padronizada de dados
+- ✅ **Retry Automático:** Múltiplas tentativas em caso de falha
+- ✅ **Screenshots:** Captura tela em caso de erro (HTML + PNG)
+- ✅ **Métricas:** Tempo de execução (started_at, finished_at, duration)
+- ✅ **Limpeza:** Fecha abas criadas e encerra Chrome ao final
+- ✅ **Headless Mode:** Execução sem interface gráfica
 
 ---
 
 ## 📦 Requisitos
 
 ### Sistema Operacional
-- Linux (Debian/Ubuntu) - recomendado para produção
-- macOS - desenvolvimento
-- Windows - desenvolvimento (com WSL2 recomendado)
+
+| SO | Status | Observação |
+|----|--------|------------|
+| **Windows Server** | ✅ Recomendado | Native Messaging funciona |
+| **macOS** | ✅ Funciona | Apenas desenvolvimento |
+| **Linux** | ❌ **BLOQUEADO** | Native Messaging não funciona via Selenium |
 
 ### Software
 
@@ -349,10 +254,13 @@ CHROME_USER_DATA_DIR=<caminho_do_perfil_chrome>
 Python 3.12+
 
 # Navegador
-Chromium/Chrome (instalado automaticamente no Docker)
+Chrome/Chromium (instalado automaticamente)
 
 # Banco de Dados
 PostgreSQL 12+
+
+# Certificado Digital
+Certificado A1 (.pfx) válido e não expirado
 ```
 
 ### Dependências Python
@@ -363,262 +271,102 @@ uvicorn[standard]==0.30.6
 selenium==4.25.0
 requests
 psycopg2
+cryptography  # Para solução WebSocket (experimental)
+websockets    # Para solução WebSocket (experimental)
 ```
 
 ---
 
-## ⚙️ Configuração
+## 🚀 Instalação
 
-### 1. Variáveis de Ambiente (.env)
-
-Crie um arquivo `.env` na raiz do projeto:
+### Ambiente de Desenvolvimento (macOS/Windows)
 
 ```bash
-# ===== BANCO DE DADOS =====
-DB_HOST=72.60.62.124
-DB_PORT=5432
-DB_NAME=n8n
-DB_USER=admin
-DB_PASSWORD=BetaAgent2024SecureDB
-
-# ===== CHROME =====
-# Caminho para o perfil do Chrome (onde está o certificado digital)
-# Windows:
-CHROME_USER_DATA_DIR="C:\Temp\ChromeProfileTest2"
-# Linux/Mac:
-# CHROME_USER_DATA_DIR="/home/user/.config/google-chrome/Default"
-
-# ===== CERTIFICADO DIGITAL (opcional) =====
-# Para auto-seleção do certificado no login CAS
-CERT_ISSUER_CN="AC Certisign Múltipla G5"
-CERT_SUBJECT_CN="NOME COMPLETO:12345678900"
-```
-
-### 2. Estrutura do Banco de Dados
-
-A tabela `consultas_esaj` deve ter a seguinte estrutura:
-
-```sql
-CREATE TABLE consultas_esaj (
-    id SERIAL PRIMARY KEY,
-    cpf VARCHAR(11) NOT NULL,
-    processos JSONB NOT NULL,
-    status BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-**Formato do campo `processos` (JSONB):**
-
-```json
-{
-  "lista": [
-    {
-      "numero": "0158003-37.2025.8.26.0500",
-      "classe": "Precatório"
-    },
-    {
-      "numero": "0123456-78.2024.8.26.0100",
-      "classe": "Precatório"
-    }
-  ]
-}
-```
-
-### 3. Perfil do Chrome com Certificado Digital
-
-#### Opção A: Usar Perfil Existente (Recomendado)
-
-1. Abra o Chrome e instale seu certificado digital (A1 ou A3)
-2. Localize o diretório do perfil:
-   - **Windows**: `C:\Users\{usuario}\AppData\Local\Google\Chrome\User Data`
-   - **Linux**: `~/.config/google-chrome/`
-   - **macOS**: `~/Library/Application Support/Google/Chrome/`
-3. Copie o caminho completo para `CHROME_USER_DATA_DIR` no `.env`
-
-#### Opção B: Criar Perfil Dedicado
-
-```bash
-# Abra Chrome com perfil customizado
-google-chrome --user-data-dir="/caminho/para/perfil/teste"
-
-# Instale o certificado digital
-# Vá em: chrome://settings/certificates
-```
-
----
-
-## 🚀 Deploy
-
-### Deploy Local (Desenvolvimento)
-
-#### 1. Instalação de Dependências
-
-```bash
-# Clone o repositório
+# 1. Clonar repositório
+git clone https://github.com/revisaprecatorio/crawler_tjsp.git
 cd crawler_tjsp
 
-# Crie ambiente virtual
+# 2. Criar ambiente virtual
 python3 -m venv venv
 source venv/bin/activate  # Linux/Mac
 # ou
-venv\Scripts\activate  # Windows
+venv\Scripts\activate     # Windows
 
-# Instale dependências
+# 3. Instalar dependências
 pip install -r requirements.txt
+
+# 4. Configurar variáveis de ambiente
+cp .env.example .env
+nano .env  # Ajustar conforme necessário
 ```
 
-#### 2. Teste do Crawler (Standalone)
+### Ambiente de Produção (Windows Server - RECOMENDADO)
 
-```bash
-# Consulta por CPF
-python crawler_full.py \
-  --doc "12345678900" \
-  --user-data-dir "/caminho/para/perfil/chrome" \
-  --abrir-autos \
-  --baixar-pdf \
-  --turbo-download \
-  --download-dir "downloads/teste"
+Veja guia completo em [DIAGNOSTIC_REPORT.md](DIAGNOSTIC_REPORT.md#-recomendação-estratégica)
 
-# Consulta por Número CNJ
-python crawler_full.py \
-  --doc "0158003-37.2025.8.26.0500" \
-  --user-data-dir "/caminho/para/perfil/chrome" \
-  --abrir-autos \
-  --baixar-pdf \
-  --turbo-download
-```
+```powershell
+# 1. Instalar software
+# - Google Chrome
+# - Web Signer 2.12.1
+# - Python 3.12
+# - Git for Windows
 
-#### 3. Teste do Orquestrador
+# 2. Importar certificado
+# Windows + R > certmgr.msc
+# Personal > Certificates > Import > certificado.pfx
 
-```bash
-# Configure o .env primeiro
-python orchestrator_subprocess.py
-```
+# 3. Configurar política Chrome
+# Registry: AutoSelectCertificateForUrls
 
-### Deploy com Docker (Produção)
-
-#### 1. Build da Imagem
-
-```bash
-# Build
-docker build -t tjsp-worker:latest .
-
-# Ou use docker-compose
-docker-compose build
-```
-
-#### 2. Executar Container
-
-```bash
-# Usando docker-compose (recomendado)
-docker-compose up -d
-
-# Ou docker run direto
-docker run -d \
-  --name tjsp_worker \
-  --env-file .env \
-  -v $(pwd)/downloads:/app/downloads \
-  -v $(pwd)/screenshots:/app/screenshots \
-  -v $(pwd)/chrome_profile:/app/chrome_profile \
-  --shm-size=2gb \
-  tjsp-worker:latest
-```
-
-#### 3. Monitoramento
-
-```bash
-# Ver logs em tempo real
-docker-compose logs -f worker
-
-# Verificar status
-docker-compose ps
-
-# Parar worker
-docker-compose down
-
-# Reiniciar worker
-docker-compose restart worker
-```
-
-### Deploy em VPS/Servidor
-
-#### 1. Preparação do Servidor
-
-```bash
-# Atualizar sistema
-sudo apt update && sudo apt upgrade -y
-
-# Instalar Docker
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
-
-# Instalar Docker Compose
-sudo apt install docker-compose -y
-
-# Adicionar usuário ao grupo docker
-sudo usermod -aG docker $USER
-```
-
-#### 2. Deploy da Aplicação
-
-```bash
-# Clonar repositório
-git clone <seu-repositorio>
+# 4. Clonar e configurar
+git clone https://github.com/revisaprecatorio/crawler_tjsp.git
 cd crawler_tjsp
+pip install -r requirements.txt
+copy .env.example .env
+notepad .env
 
-# Configurar .env
-nano .env
-
-# Ajustar permissões
-chmod 600 .env
-
-# Subir containers
-docker-compose up -d
-
-# Verificar logs
-docker-compose logs -f
-```
-
-#### 3. Configurar como Serviço Systemd (Opcional)
-
-Crie `/etc/systemd/system/tjsp-worker.service`:
-
-```ini
-[Unit]
-Description=TJSP Crawler Worker
-Requires=docker.service
-After=docker.service
-
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-WorkingDirectory=/caminho/para/crawler_tjsp
-ExecStart=/usr/bin/docker-compose up -d
-ExecStop=/usr/bin/docker-compose down
-TimeoutStartSec=0
-
-[Install]
-WantedBy=multi-user.target
-```
-
-```bash
-# Habilitar serviço
-sudo systemctl enable tjsp-worker
-sudo systemctl start tjsp-worker
-
-# Verificar status
-sudo systemctl status tjsp-worker
+# 5. Testar
+python crawler_full.py --doc "12345678900" --abrir-autos --baixar-pdf
 ```
 
 ---
 
 ## 💻 Uso
 
-### Uso Standalone (crawler_full.py)
+### Crawler Standalone
 
-#### Parâmetros Disponíveis
+```bash
+# Consulta simples (apenas extrai dados)
+python crawler_full.py --doc "12345678900"
+
+# Consulta + abre Pasta Digital (sem download)
+python crawler_full.py \
+  --doc "12345678900" \
+  --abrir-autos
+
+# Consulta + download PDF (modo TURBO)
+python crawler_full.py \
+  --doc "0158003-37.2025.8.26.0500" \
+  --abrir-autos \
+  --baixar-pdf \
+  --turbo-download \
+  --download-dir "downloads/cliente123"
+
+# Modo headless (servidor sem GUI)
+python crawler_full.py \
+  --doc "12345678900" \
+  --abrir-autos \
+  --baixar-pdf \
+  --headless
+
+# Com login CPF/senha (sem certificado)
+python crawler_full.py \
+  --doc "12345678900" \
+  --cas-usuario "98765432100" \
+  --cas-senha "minhaSenha123"
+```
+
+### Parâmetros Disponíveis
 
 | Parâmetro | Obrigatório | Descrição |
 |-----------|-------------|-----------|
@@ -635,45 +383,18 @@ sudo systemctl status tjsp-worker
 | `--headless` | ❌ | Executa sem interface gráfica |
 | `--debugger-address` | ❌ | Anexa a Chrome existente (ex: `localhost:9222`) |
 
-#### Exemplos de Uso
+### Orquestrador (Worker)
 
 ```bash
-# 1. Consulta simples (apenas extrai dados)
-python crawler_full.py --doc "12345678900"
+# Modo direto
+python orchestrator_subprocess.py
 
-# 2. Consulta + abre Pasta Digital (sem download)
-python crawler_full.py \
-  --doc "12345678900" \
-  --abrir-autos \
-  --user-data-dir "/caminho/perfil/chrome"
-
-# 3. Consulta + download PDF (modo TURBO)
-python crawler_full.py \
-  --doc "0158003-37.2025.8.26.0500" \
-  --abrir-autos \
-  --baixar-pdf \
-  --turbo-download \
-  --download-dir "downloads/cliente123" \
-  --user-data-dir "/caminho/perfil/chrome"
-
-# 4. Modo headless (servidor sem GUI)
-python crawler_full.py \
-  --doc "12345678900" \
-  --abrir-autos \
-  --baixar-pdf \
-  --headless \
-  --user-data-dir "/home/user/.chrome-profile"
-
-# 5. Com login CPF/senha (sem certificado)
-python crawler_full.py \
-  --doc "12345678900" \
-  --cas-usuario "98765432100" \
-  --cas-senha "minhaSenha123"
+# Com Docker (Linux - atualmente BLOQUEADO)
+docker compose up -d worker
+docker compose logs -f worker
 ```
 
-### Uso do Orquestrador (orchestrator_subprocess.py)
-
-#### Inserir Jobs no Banco
+### Gerenciar Filas no Banco
 
 ```sql
 -- Inserir novo job
@@ -682,40 +403,17 @@ VALUES (
   '12345678900',
   '{
     "lista": [
-      {"numero": "0158003-37.2025.8.26.0500", "classe": "Precatório"},
-      {"numero": "0123456-78.2024.8.26.0100", "classe": "Precatório"}
+      {"numero": "0158003-37.2025.8.26.0500", "classe": "Precatório"}
     ]
   }'::jsonb,
   false
 );
-```
 
-#### Executar Orquestrador
-
-```bash
-# Modo direto
-python orchestrator_subprocess.py
-
-# Com Docker
-docker-compose up -d worker
-docker-compose logs -f worker
-```
-
-#### Monitorar Progresso
-
-```sql
 -- Ver jobs pendentes
 SELECT id, cpf, status, created_at
 FROM consultas_esaj
 WHERE status = false
 ORDER BY id;
-
--- Ver jobs processados
-SELECT id, cpf, status, created_at
-FROM consultas_esaj
-WHERE status = true
-ORDER BY created_at DESC
-LIMIT 10;
 
 -- Resetar job para reprocessamento
 UPDATE consultas_esaj
@@ -725,235 +423,187 @@ WHERE id = 123;
 
 ---
 
-## 📊 Estrutura de Dados
+## 📚 Documentação
 
-### Output JSON (crawler_full.py)
-
-```json
-{
-  "documento": "12345678900",
-  "processo": null,
-  "ok": true,
-  "has_precatorio": true,
-  "found_process_numbers": [
-    "0158003-37.2025.8.26.0500"
-  ],
-  "results": [
-    {
-      "numero_processo": "0158003-37.2025.8.26.0500",
-      "classe_processo": "Precatório",
-      "assunto_processo": "Requisição de Pequeno Valor - RPV",
-      "foro_processo": "Foro Central - Fazenda Pública/Acidentes",
-      "vara_processo": "5ª Vara de Fazenda Pública",
-      "juiz_processo": "Dr. João da Silva",
-      "is_precatorio": true,
-      "link_pasta_digital": "https://esaj.tjsp.jus.br/pastadigital/..."
-    }
-  ],
-  "downloaded_files": [
-    "/app/downloads/12345678900/processo_0158003-37.2025.8.26.0500.pdf"
-  ],
-  "download_errors": [],
-  "error": null,
-  "screenshot_path": "screenshots/screenshot_0158003372025826050_20250130_143022.png",
-  "last_url": "https://esaj.tjsp.jus.br/cpopg/show.do?processo.codigo=...",
-  "started_at": "2025-01-30 14:28:15",
-  "finished_at": "2025-01-30 14:30:22",
-  "duration_seconds": 127.456,
-  "duration_hms": "2m07s"
-}
-```
-
-### Estrutura de Diretórios
+### Estrutura de Arquivos
 
 ```
 crawler_tjsp/
-├── .env                          # Variáveis de ambiente
-├── .git/                         # Controle de versão
-├── Dockerfile                    # Imagem Docker
-├── docker-compose.yml            # Orquestração Docker
-├── requirements.txt              # Dependências Python
-├── README.md                     # Esta documentação
-├── crawler_full.py               # Motor do crawler
-├── orchestrator_subprocess.py    # Orquestrador de filas
-├── downloads/                    # PDFs baixados
-│   ├── 12345678900/
-│   │   └── processo_*.pdf
-│   └── 98765432100/
-│       └── processo_*.pdf
-├── screenshots/                  # Screenshots e logs
-│   ├── screenshot_*.png
-│   ├── erro_*.html
-│   └── erro_*.png
-└── chrome_profile/               # Perfil do Chrome (Docker)
+├── README.md                          # Este arquivo
+├── DIAGNOSTIC_REPORT.md               # ⭐ Análise completa e alternativas
+├── DEPLOY_TRACKING.md                 # Histórico de 30 deploys
+├── crawler_full.py                    # Motor do crawler (Selenium)
+├── orchestrator_subprocess.py         # Orquestrador de filas
+├── requirements.txt                   # Dependências Python
+├── Dockerfile                         # Imagem Docker (worker)
+├── docker-compose.yml                 # Orquestração Docker
+├── .env.example                       # Template de configuração
+│
+├── docs/                              # Documentação técnica
+│   ├── PLANO_XVFB_WEBSIGNER.md       # Plano Xvfb (não funcionou)
+│   ├── PLANO_WEBSOCKET.md            # Plano WebSocket (experimental)
+│   ├── CERTIFICADO_DIGITAL_SETUP.md  # Setup de certificado
+│   ├── TROUBLESHOOTING_AUTENTICACAO.md
+│   └── QUEUE_MANAGEMENT.md
+│
+├── chrome_extension/                  # Extensão customizada (WebSocket)
+│   ├── manifest.json
+│   ├── background.js
+│   ├── content.js
+│   └── injected.js
+│
+├── websocket_cert_server.py          # Servidor WebSocket (experimental)
+├── wip-research/                     # Pesquisas técnicas
+│   ├── wip-Claude-search.md
+│   ├── wip-Chatgpt-search.md
+│   └── wip-Perplexity-search.md
+│
+├── downloads/                        # PDFs baixados
+├── screenshots/                      # Screenshots e logs
+└── log_deploys/                      # Histórico de deploys
 ```
+
+### Documentos Importantes
+
+| Arquivo | Descrição |
+|---------|-----------|
+| [DIAGNOSTIC_REPORT.md](DIAGNOSTIC_REPORT.md) | **⭐ LEIA PRIMEIRO** - Análise completa, problema técnico e soluções |
+| [DEPLOY_TRACKING.md](DEPLOY_TRACKING.md) | Histórico detalhado de 30 tentativas de deploy |
+| [PLANO_WEBSOCKET.md](PLANO_WEBSOCKET.md) | Solução WebSocket customizada (experimental) |
+| [wip-research/](wip-research/) | Pesquisas em Claude, ChatGPT, Perplexity |
 
 ---
 
 ## 🔧 Troubleshooting
 
-### Problemas Comuns
+### Erro: "Certificado não encontrado"
 
-#### 1. Erro: "Certificado não encontrado"
+**Causa:** Certificado não importado no Chrome.
 
-**Causa**: Perfil do Chrome não tem certificado instalado.
+**Solução (Windows):**
+```powershell
+# Abrir gerenciador de certificados
+certmgr.msc
 
-**Solução**:
-```bash
-# Abra Chrome com o perfil
-google-chrome --user-data-dir="/caminho/perfil"
-
-# Vá em chrome://settings/certificates
-# Importe seu certificado A1 (.pfx) ou conecte token A3
+# Personal > Certificates > Import
+# Selecionar arquivo .pfx e importar
 ```
 
-#### 2. Erro: "Timeout aguardando resultado"
+**Solução (Linux - NSS):**
+```bash
+# Criar NSS database
+mkdir -p ~/.pki/nssdb
+certutil -d sql:$HOME/.pki/nssdb -N --empty-password
 
-**Causa**: Site ESAJ lento ou consulta sem resultados.
+# Importar certificado
+pk12util -d sql:$HOME/.pki/nssdb -i certificado.pfx
 
-**Solução**:
-- Verifique se o CPF/CNJ está correto
-- Tente novamente (pode ser instabilidade do ESAJ)
-- Aumente timeout em `_wait_result_page()` se necessário
+# Verificar
+certutil -L -d sql:$HOME/.pki/nssdb
+```
 
-#### 3. Erro: "Selecione pelo menos um item da árvore"
+### Erro: "Timeout aguardando resultado"
 
-**Causa**: Árvore de documentos não carregou a tempo.
+**Causa:** Site e-SAJ lento ou consulta sem resultados.
 
-**Solução**:
-- Use `--turbo-download` (já trata esse erro automaticamente)
+**Solução:**
+- Verificar se CPF/CNJ está correto
+- Tentar novamente (instabilidade do e-SAJ)
+- Aumentar timeout em `_wait_result_page()` se necessário
+
+### Erro: "Selecione pelo menos um item da árvore"
+
+**Causa:** Árvore de documentos não carregou a tempo.
+
+**Solução:**
+- Usar `--turbo-download` (já trata esse erro automaticamente)
 - Função `_dismiss_select_alert_and_retry()` resolve isso
 
-#### 4. Download não inicia
+### Container Docker não inicia
 
-**Causa**: Chrome não configurado para download automático.
+**Causa:** Falta de memória compartilhada.
 
-**Solução**:
-- Verifique se `plugins.always_open_pdf_externally: True` está nas prefs
-- Tente fallback HTTP (automático no código)
-
-#### 5. Container Docker não inicia
-
-**Causa**: Falta de memória compartilhada.
-
-**Solução**:
+**Solução:**
 ```yaml
 # No docker-compose.yml
-shm_size: '2gb'  # Aumentar se necessário
+shm_size: '2gb'
 ```
 
-#### 6. Erro de conexão com PostgreSQL
+### Erro de conexão com PostgreSQL
 
-**Causa**: Credenciais incorretas ou firewall.
+**Causa:** Credenciais incorretas ou firewall.
 
-**Solução**:
+**Solução:**
 ```bash
 # Teste conexão manual
 psql -h 72.60.62.124 -p 5432 -U admin -d n8n
 
-# Verifique firewall
+# Verificar firewall
 sudo ufw allow 5432/tcp
-```
-
-### Logs e Debug
-
-#### Habilitar Debug no Crawler
-
-Descomente as linhas em `debug()`:
-
-```python
-def debug(payload, msg):
-    ts = datetime.now().strftime("%H:%M:%S.%f")[:-3]
-    line = f"[{ts}] {msg}"
-    print(line)  # <-- Descomentar
-    payload.setdefault("debug_steps", []).append(line)  # <-- Descomentar
-```
-
-#### Ver Logs do Docker
-
-```bash
-# Logs em tempo real
-docker-compose logs -f worker
-
-# Últimas 100 linhas
-docker-compose logs --tail=100 worker
-
-# Salvar logs em arquivo
-docker-compose logs worker > logs.txt
-```
-
-#### Inspecionar Container
-
-```bash
-# Entrar no container
-docker exec -it tjsp_worker_1 /bin/bash
-
-# Ver processos
-ps aux | grep python
-
-# Ver arquivos baixados
-ls -lh /app/downloads/
-```
-
-### Performance
-
-#### Otimizações Recomendadas
-
-1. **Modo TURBO**: Sempre use `--turbo-download` para processos grandes
-2. **Headless**: Use `--headless` em produção (economiza recursos)
-3. **Timeout**: Ajuste timeouts conforme velocidade da internet
-4. **Paralelização**: Execute múltiplos workers (cada um com seu perfil Chrome)
-
-```bash
-# Múltiplos workers
-docker-compose up -d --scale worker=3
 ```
 
 ---
 
-## 📝 Notas Importantes
+## 🗺️ Roadmap
 
-### Certificado Digital
+### Curto Prazo (Próximas 2 semanas)
 
-- **A1**: Arquivo .pfx instalado no Chrome (mais fácil para automação)
-- **A3**: Token/smartcard (requer interação manual, não recomendado)
+- [ ] **Decisão estratégica:** Windows Server ou Legal Wizard
+- [ ] **Implementar solução escolhida** (3-4 horas)
+- [ ] **Validar autenticação** end-to-end
+- [ ] **Processar 100 jobs reais** (teste de stress)
+- [ ] **Documentar setup final**
 
-### Limitações
+### Médio Prazo (Próximo mês)
 
-- O ESAJ pode ter rate limiting (evite muitas requisições simultâneas)
-- Certificados A3 podem exigir PIN (dificulta automação)
-- Downloads muito grandes (>500MB) podem dar timeout
+- [ ] Otimizar custos (auto-shutdown, Reserved Instance)
+- [ ] Implementar monitoramento (alertas, métricas)
+- [ ] Configurar backup e disaster recovery
+- [ ] Criar dashboard de acompanhamento
+- [ ] Documentação de manutenção
 
-### Segurança
+### Longo Prazo (Próximos 3-6 meses)
 
-- **Nunca commite o .env** (está no .gitignore)
-- Use variáveis de ambiente para senhas
-- Certificados devem estar em volumes seguros
-- Limite acesso ao banco de dados por IP
+- [ ] Avaliar migração para Playwright
+- [ ] Investigar APIs REST do TJSP (se existirem)
+- [ ] Considerar paralelização (múltiplos workers)
+- [ ] Implementar cache de resultados
+- [ ] Exportar para formatos estruturados (JSON, CSV)
 
-### Manutenção
+---
 
-- Atualize Selenium regularmente: `pip install --upgrade selenium`
-- Monitore mudanças no site ESAJ (podem quebrar seletores)
-- Faça backup dos downloads periodicamente
+## 🤝 Contribuição
+
+Este é um projeto proprietário de uso interno.
+
+Para dúvidas ou sugestões:
+1. Verificar [DIAGNOSTIC_REPORT.md](DIAGNOSTIC_REPORT.md)
+2. Consultar [DEPLOY_TRACKING.md](DEPLOY_TRACKING.md)
+3. Revisar [wip-research/](wip-research/)
+4. Contatar equipe de desenvolvimento
 
 ---
 
 ## 📄 Licença
 
-Este projeto é proprietário e de uso interno.
+Proprietário - Uso interno apenas.
 
 ---
 
-## 👥 Suporte
+## 📞 Suporte
 
-Para dúvidas ou problemas:
-1. Verifique esta documentação
-2. Consulte os logs (`docker-compose logs`)
-3. Teste manualmente com `crawler_full.py` standalone
-4. Entre em contato com a equipe de desenvolvimento
+**Status do Projeto:** Aguardando decisão estratégica
+
+**Próximos Passos:**
+1. Ler [DIAGNOSTIC_REPORT.md](DIAGNOSTIC_REPORT.md)
+2. Decidir entre Windows Server ou Legal Wizard
+3. Implementar solução escolhida
+4. Validar em produção
+
+**Documentação Técnica Completa:** [DIAGNOSTIC_REPORT.md](DIAGNOSTIC_REPORT.md)
 
 ---
 
-**Última atualização**: 2025-01-30  
-**Versão**: 2.0.0
+**Última atualização:** 2025-10-04
+**Versão:** 2.0 (Restruturação profissional)
+**Mantenedor:** Equipe de Desenvolvimento

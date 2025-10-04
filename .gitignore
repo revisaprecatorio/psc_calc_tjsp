@@ -1,0 +1,87 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# AI Agent Rules (manter)
+.clinerules/byterover-rules.md
+.kilocode/rules/byterover-rules.md
+.roo/rules/byterover-rules.md
+.windsurf/rules/byterover-rules.md
+.cursor/rules/byterover-rules.mdc
+.kiro/steering/byterover-rules.md
+.qoder/rules/byterover-rules.md
+.augment/rules/byterover-rules.md
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Downloads e Screenshots
+downloads/
+screenshots/
+*.pdf
+*.png
+*.html
+!chrome_extension/*.png
+
+# Certificados (SENSÍVEL - NUNCA COMMITAR)
+*.pfx
+*.p12
+*.pem
+*.key
+certs/*.pfx
+certs/*.p12
+certs/*.pem
+certs/*.key
+
+# Logs
+*.log
+logs/
+*.out
+
+# Docker
+.dockerignore
+
+# Temporários
+tmp/
+temp/
+*.tmp
+.cache/
+
+# NSS Database (certificados)
+.pki/
+
+# Chrome
+chrome_profile/
+.config/google-chrome/
+
+# Backups
+*.backup
+*.bak
+*.old
+docker-compose.yml.backup*
+.env.backup*
+.env.new*
+
+# Sistema
+Thumbs.db
+.Spotlight-V100
+.Trashes

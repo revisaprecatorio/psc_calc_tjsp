@@ -1,0 +1,48 @@
+services:
+  worker:
+    # Constrói a imagem a partir do Dockerfile local
+    build: .
+    # Define um nome para a imagem construída
+    image: tjsp-worker:latest
+    # Define um nome para o contêiner em execução
+    container_name: tjsp_worker_1
+    
+    # MODIFICADO: Usa rede host para acessar ChromeDriver local
+    network_mode: host
+    
+    # Adicionado para carregar todas as variáveis do arquivo .env
+    # Esta é a melhor forma de gerenciar segredos e configurações
+    env_file:
+      - .env
+    
+    # MODIFICADO: Conecta ao ChromeDriver local (host) via localhost
+    environment:
+      - SELENIUM_REMOTE_URL=http://localhost:4444
+      - DISPLAY=:99
+
+    # Mapeia pastas locais para dentro do contêiner para persistir dados
+    volumes:
+      - ./downloads:/app/downloads
+      - ./screenshots:/app/screenshots
+      # Mantido o volume de certificados, caso seu crawler precise
+      - ./certs:/app/certs
+
+    # Política de reinício: o contêiner sempre será reiniciado
+    # a menos que você o pare manualmente. Perfeito para um worker.
+    restart: unless-stopped
+
+  # COMENTADO: Não usamos mais Selenium Grid em container
+  # Agora usamos ChromeDriver + Xvfb instalados diretamente no host Ubuntu
+  # selenium-chrome:
+  #   image: selenium/standalone-chrome:latest
+  #   container_name: selenium_chrome
+  #   ports:
+  #     - "4444:4444"
+  #     - "7900:7900"
+  #   shm_size: '2gb'
+  #   environment:
+  #     - SE_NODE_MAX_SESSIONS=5
+  #     - SE_NODE_SESSION_TIMEOUT=300
+  #   volumes:
+  #     - ./downloads:/home/seluser/downloads
+  #     - ./screenshots:/home/seluser/screenshots
