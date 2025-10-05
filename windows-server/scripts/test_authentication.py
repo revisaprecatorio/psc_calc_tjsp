@@ -37,9 +37,12 @@ from datetime import datetime
 
 CHROME_BINARY = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
 CHROMEDRIVER_PATH = r"C:\chromedriver\chromedriver.exe"
-# NÃO USAR user-data-dir customizado! Deixar Chrome usar perfil padrão (onde Web Signer está instalado)
-USER_DATA_DIR = None  # Alterado de r"C:\temp\chrome-profile-test"
-EXTENSION_PATH = r"C:\projetos\crawler_tjsp\chrome_extension"
+
+# CORREÇÃO CRÍTICA: Usar perfil Default do Chrome (onde Web Signer está instalado)
+# Descoberto via chrome://version: Profile Path = C:\Users\Administrator\AppData\Local\Google\Chrome\User Data\Default
+USER_DATA_DIR = r"C:\Users\Administrator\AppData\Local\Google\Chrome\User Data"
+PROFILE_DIRECTORY = "Default"
+
 SCREENSHOTS_DIR = r"C:\projetos\crawler_tjsp\screenshots"
 LOG_FILE = r"C:\projetos\crawler_tjsp\logs\test_auth.log"
 
@@ -73,32 +76,26 @@ def save_screenshot(driver, name):
 def setup_chrome():
     """Configura e retorna instância do Chrome via Selenium."""
     log("🔧 Configurando Chrome...")
+    log(f"  📁 User Data Dir: {USER_DATA_DIR}")
+    log(f"  👤 Profile: {PROFILE_DIRECTORY}")
 
     # Opções do Chrome
     chrome_options = Options()
     chrome_options.binary_location = CHROME_BINARY
 
+    # CRÍTICO: Usar perfil Default onde Web Signer está instalado
+    # Replicar exatamente o comportamento do Chrome manual (clicar no ícone)
+    chrome_options.add_argument(f"--user-data-dir={USER_DATA_DIR}")
+    chrome_options.add_argument(f"--profile-directory={PROFILE_DIRECTORY}")
+    log(f"  ✅ Usando perfil Default do Chrome (Web Signer já instalado)")
+
     # Configurações importantes
     chrome_options.add_argument("--start-maximized")
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
 
-    # NÃO adicionar --user-data-dir! Deixar Chrome usar perfil padrão (revisa.precatorio@gmail.com)
-    # Isso replica o comportamento do PowerShell Start-Process que abre o perfil correto
-    # Se adicionarmos user-data-dir, Chrome cria perfil novo sem Web Signer
-    if USER_DATA_DIR:
-        os.makedirs(USER_DATA_DIR, exist_ok=True)
-        chrome_options.add_argument(f"--user-data-dir={USER_DATA_DIR}")
-        log(f"  ⚠️ Usando perfil customizado: {USER_DATA_DIR}")
-    else:
-        log(f"  ✅ Usando perfil padrão do Chrome (onde Web Signer está instalado)")
-
-    # Carregar extensão Web Signer (se existir localmente)
-    if os.path.exists(EXTENSION_PATH):
-        chrome_options.add_argument(f"--load-extension={EXTENSION_PATH}")
-        log(f"  ✅ Extensão carregada: {EXTENSION_PATH}")
-    else:
-        log(f"  ⚠️ Extensão não encontrada em: {EXTENSION_PATH}", "WARNING")
-        log(f"  ℹ️  A extensão pode estar instalada via Chrome Web Store", "INFO")
+    # NÃO carregar extensão local! Web Signer já está instalado no perfil Default
+    # Carregar extensão local forçaria criação de perfil temporário
+    log(f"  ✅ Web Signer será carregado do perfil (não precisa --load-extension)")
 
     # Preferências
     prefs = {
@@ -116,6 +113,19 @@ def setup_chrome():
     try:
         driver = webdriver.Chrome(service=service, options=chrome_options)
         log("  ✅ Chrome iniciado com sucesso!")
+
+        # Verificar qual perfil foi carregado
+        try:
+            driver.get("chrome://version")
+            time.sleep(1)
+            page_source = driver.page_source
+            if "Default" in page_source:
+                log("  ✅ Confirmado: Perfil Default carregado!")
+            else:
+                log("  ⚠️ Aviso: Perfil pode não ser Default", "WARNING")
+        except:
+            pass  # Ignorar erro de verificação
+
         return driver
     except Exception as e:
         log(f"  ❌ Erro ao iniciar Chrome: {e}", "ERROR")
@@ -161,7 +171,27 @@ def test_authentication():
             log(f"  ❌ Erro ao carregar página: {e}", "ERROR")
             return False
 
-        # 4. Procurar botão "Certificado Digital"
+        # 4. Verificar se já está logado (sessão mantida do perfil)
+        log("🔍 Verificando se já está logado...")
+        current_url = driver.current_url
+        page_source = driver.page_source
+
+        # Se encontrar "Identificar-se" no canto superior, já está logado
+        if "Identificar-se" in page_source or "servico=" in current_url:
+            log("=" * 70)
+            log("✅ JÁ ESTÁ LOGADO! Sessão mantida do perfil Default!", "SUCCESS")
+            log("=" * 70)
+            log(f"  URL: {current_url}")
+            save_screenshot(driver, "02_already_logged_in")
+            log("")
+            log("🎉 RESULTADO:")
+            log("   ✅ Perfil Default carregado corretamente!")
+            log("   ✅ Sessão autenticada mantida!")
+            log("   ✅ Não precisa fazer login novamente!")
+            log("")
+            return True
+
+        # 5. Se não estiver logado, procurar botão "Certificado Digital"
         log("🔍 Procurando botão 'Certificado Digital'...")
         try:
             cert_button = WebDriverWait(driver, 10).until(

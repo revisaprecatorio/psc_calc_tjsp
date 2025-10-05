@@ -38,9 +38,12 @@ from datetime import datetime
 
 CHROME_BINARY = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
 CHROMEDRIVER_PATH = r"C:\chromedriver\chromedriver.exe"
-# NÃO USAR user-data-dir customizado! Deixar Chrome usar perfil padrão
-USER_DATA_DIR = None
-EXTENSION_PATH = r"C:\projetos\crawler_tjsp\chrome_extension"
+
+# CORREÇÃO CRÍTICA: Usar perfil Default do Chrome (onde Web Signer está instalado)
+# Descoberto via chrome://version: Profile Path = C:\Users\Administrator\AppData\Local\Google\Chrome\User Data\Default
+USER_DATA_DIR = r"C:\Users\Administrator\AppData\Local\Google\Chrome\User Data"
+PROFILE_DIRECTORY = "Default"
+
 SCREENSHOTS_DIR = r"C:\projetos\crawler_tjsp\screenshots"
 LOG_FILE = r"C:\projetos\crawler_tjsp\logs\test_direct_access.log"
 
@@ -99,29 +102,25 @@ def save_page_source(driver, name):
 def setup_chrome():
     """Configura e retorna instância do Chrome via Selenium."""
     log("🔧 Configurando Chrome...")
+    log(f"  📁 User Data Dir: {USER_DATA_DIR}")
+    log(f"  👤 Profile: {PROFILE_DIRECTORY}")
 
     # Opções do Chrome
     chrome_options = Options()
     chrome_options.binary_location = CHROME_BINARY
 
+    # CRÍTICO: Usar perfil Default onde Web Signer está instalado
+    # Replicar exatamente o comportamento do Chrome manual (clicar no ícone)
+    chrome_options.add_argument(f"--user-data-dir={USER_DATA_DIR}")
+    chrome_options.add_argument(f"--profile-directory={PROFILE_DIRECTORY}")
+    log(f"  ✅ Usando perfil Default do Chrome (Web Signer já instalado)")
+
     # Configurações importantes
     chrome_options.add_argument("--start-maximized")
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
 
-    # NÃO adicionar --user-data-dir! Deixar Chrome usar perfil padrão
-    if USER_DATA_DIR:
-        os.makedirs(USER_DATA_DIR, exist_ok=True)
-        chrome_options.add_argument(f"--user-data-dir={USER_DATA_DIR}")
-        log(f"  ⚠️ Usando perfil customizado: {USER_DATA_DIR}")
-    else:
-        log(f"  ✅ Usando perfil padrão do Chrome (onde Web Signer está instalado)")
-
-    # Carregar extensão Web Signer (se existir localmente)
-    if os.path.exists(EXTENSION_PATH):
-        chrome_options.add_argument(f"--load-extension={EXTENSION_PATH}")
-        log(f"  ✅ Extensão carregada: {EXTENSION_PATH}")
-    else:
-        log(f"  ℹ️  Extensão instalada via Chrome Web Store", "INFO")
+    # NÃO carregar extensão local! Web Signer já está instalado no perfil Default
+    log(f"  ✅ Web Signer será carregado do perfil (não precisa --load-extension)")
 
     # Preferências
     prefs = {
