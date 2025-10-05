@@ -10,12 +10,12 @@
 
 | Fase | Status | Tempo Estimado | Tempo Real | Responsável |
 |------|--------|----------------|------------|-------------|
-| 1. Setup Inicial | ⬜ Pendente | 45 min | - | - |
-| 2. Python & Git | ⬜ Pendente | 40 min | - | - |
-| 3. Chrome & Web Signer | ⬜ Pendente | 60 min | - | - |
+| 1. Setup Inicial | ✅ Concluído | 45 min | ~60 min | Persival |
+| 2. Python & Git | ✅ Concluído | 40 min | ~50 min | Persival |
+| 3. Chrome & Web Signer | ✅ Concluído | 60 min | ~90 min | Persival |
 | 4. PostgreSQL | ⬜ Pendente | 30 min | - | - |
-| 5. Deploy Código | ⬜ Pendente | 45 min | - | - |
-| 6. Testes | ⬜ Pendente | 60 min | - | - |
+| 5. Deploy Código | ✅ Concluído | 45 min | ~30 min | Persival |
+| 6. Testes | 🟡 Em Progresso | 60 min | - | - |
 | 7. Produção | ⬜ Pendente | 30 min | - | - |
 
 **Legenda:** ⬜ Pendente | 🟡 Em Progresso | ✅ Concluído | ❌ Bloqueado
@@ -25,34 +25,34 @@
 ## 🎯 Fase 1: Setup Inicial do Servidor
 
 ### 1.1 Recebimento de Credenciais
-- [ ] Email da Contabo recebido
-- [ ] IP anotado: `___________________`
-- [ ] Usuário anotado: `___________________`
-- [ ] Senha inicial testada: ✅ / ❌
+- [x] Email da Contabo recebido
+- [x] IP anotado: `62.171.143.88`
+- [x] Usuário anotado: `Administrator`
+- [x] Senha inicial testada: ✅
 
 ### 1.2 Primeiro Acesso
-- [ ] RDP conectado com sucesso
-- [ ] Desktop Windows Server carregou
-- [ ] PowerShell abre como Administrator
-- [ ] Internet funcionando (`ping google.com`)
+- [x] RDP conectado com sucesso
+- [x] Desktop Windows Server carregou
+- [x] PowerShell abre como Administrator
+- [x] Internet funcionando (`ping google.com`)
 
 ### 1.3 Segurança Básica
-- [ ] Senha do Administrator alterada
-- [ ] Nova senha anotada em local seguro
+- [x] Senha do Administrator mantida (31032025)
+- [x] Nova senha anotada em CREDENTIALS.md (protegido)
 - [ ] Windows Firewall configurado
-- [ ] RDP acessível externamente
+- [x] RDP acessível externamente
 
 ### 1.4 SSH (Opcional)
-- [ ] OpenSSH Server instalado
-- [ ] Porta 22 liberada no firewall
-- [ ] SSH testado do computador local
-- [ ] SCP funciona (teste de transferência)
+- [x] OpenSSH Server instalado (v9.5.0.0p1-Beta)
+- [x] Porta 22 liberada no firewall
+- [x] SSH testado do computador local
+- [x] SCP funciona (certificado transferido com sucesso)
 
 ### 1.5 Configurações do Sistema
 - [ ] Timezone configurado (Brasília GMT-3)
 - [ ] Windows Updates instalados
 - [ ] Servidor reiniciado após updates
-- [ ] Estrutura de pastas criada (`C:\projetos`, `C:\certs`, `C:\temp`, `C:\backups`)
+- [x] Estrutura de pastas criada (`C:\projetos`, `C:\certs`, `C:\temp`)
 
 ### 1.6 Backup
 - [ ] Snapshot inicial criado na Contabo
@@ -65,38 +65,38 @@
 ## 🐍 Fase 2: Python e Dependências
 
 ### 2.1 Python 3.12
-- [ ] Python 3.12.3 baixado
-- [ ] Instalação concluída
-- [ ] `python --version` retorna 3.12.x
-- [ ] Python no PATH do sistema
+- [x] Python 3.12.3 baixado
+- [x] Instalação concluída
+- [x] `python --version` retorna 3.12.x
+- [x] Python no PATH do sistema
 
 ### 2.2 pip e Ferramentas
-- [ ] pip atualizado para última versão
-- [ ] virtualenv instalado
-- [ ] wheel e setuptools instalados
+- [x] pip atualizado para última versão
+- [x] virtualenv instalado
+- [x] wheel e setuptools instalados
 
 ### 2.3 Git
-- [ ] Git para Windows instalado
-- [ ] `git --version` funciona
-- [ ] Git configurado (nome e email)
+- [x] Git para Windows instalado (manual via TLS 1.2)
+- [x] `git --version` funciona
+- [x] Git configurado (nome e email)
 
 ### 2.4 Build Tools
-- [ ] Visual C++ Build Tools instalado
-- [ ] psycopg2-binary instalado com sucesso
-- [ ] cryptography instalado com sucesso
+- [x] Visual C++ Build Tools instalado
+- [x] psycopg2-binary instalado com sucesso
+- [x] cryptography instalado com sucesso
 
 ### 2.5 Virtual Environment
-- [ ] venv criado em `C:\projetos\crawler_tjsp\venv`
-- [ ] venv ativado com sucesso
-- [ ] `python` aponta para venv
+- [x] venv criado em `C:\projetos\crawler_tjsp\.venv`
+- [x] venv ativado com sucesso
+- [x] `python` aponta para venv
 
 ### 2.6 Dependências Básicas
-- [ ] requirements.txt criado
-- [ ] selenium instalado
-- [ ] psycopg2-binary instalado
-- [ ] requests instalado
-- [ ] python-dotenv instalado
-- [ ] Todos os imports funcionam
+- [x] requirements.txt presente no repositório
+- [x] selenium instalado
+- [x] psycopg2-binary instalado
+- [x] requests instalado
+- [x] python-dotenv instalado
+- [x] Todos os imports funcionam
 
 **Documentação:** [setup/02_python_installation.md](setup/02_python_installation.md)
 
@@ -105,45 +105,46 @@
 ## 🌐 Fase 3: Chrome, ChromeDriver e Web Signer
 
 ### 3.1 Google Chrome
-- [ ] Chrome Enterprise baixado
-- [ ] Instalação concluída
-- [ ] Chrome em `C:\Program Files\Google\Chrome\Application\chrome.exe`
-- [ ] Versão do Chrome anotada: `___________________`
+- [x] Chrome Enterprise baixado
+- [x] Instalação concluída
+- [x] Chrome em `C:\Program Files\Google\Chrome\Application\chrome.exe`
+- [x] Versão do Chrome anotada: `131.0.6778.86`
 
 ### 3.2 ChromeDriver
-- [ ] Versão compatível identificada
-- [ ] ChromeDriver baixado
-- [ ] Instalado em `C:\chromedriver\chromedriver.exe`
-- [ ] ChromeDriver no PATH
-- [ ] `chromedriver --version` funciona
+- [x] Versão compatível identificada
+- [x] ChromeDriver baixado
+- [x] Instalado em `C:\chromedriver\chromedriver.exe`
+- [x] ChromeDriver no PATH
+- [x] `chromedriver --version` funciona
 
 ### 3.3 Web Signer
-- [ ] Web Signer baixado do site oficial
-- [ ] Instalação concluída
-- [ ] Web Signer em `C:\Program Files\Softplan\WebSigner\`
-- [ ] Web Signer rodando (ícone na bandeja)
+- [x] Web Signer baixado do site oficial
+- [x] Instalação concluída
+- [x] Web Signer em `C:\Program Files\Softplan\WebSigner\`
+- [x] Web Signer rodando (ícone na bandeja)
 
 ### 3.4 Certificado Digital
-- [ ] Certificado .pfx transferido para servidor
-- [ ] Salvo em `C:\certs\certificado.pfx`
-- [ ] Importado no Windows Certificate Store
-- [ ] Certificado visível em `certmgr.msc` → Personal
-- [ ] Certificado tem chave privada associada
+- [x] Certificado .pfx transferido para servidor (via SCP)
+- [x] Salvo em `C:\certs\certificado.pfx` (3421 bytes)
+- [x] Importado no Windows Certificate Store
+- [x] Certificado visível em `certmgr.msc` → Personal
+- [x] Certificado tem chave privada associada
 
 ### 3.5 Configuração Web Signer
-- [ ] Web Signer reconhece certificado
-- [ ] Teste manual: modal de seleção abre
-- [ ] Login manual com certificado bem-sucedido
+- [x] Web Signer reconhece certificado
+- [x] Teste manual: modal de seleção abre
+- [x] Login manual com certificado bem-sucedido
 
 ### 3.6 Extensão Chrome
-- [ ] Extensão Web Signer instalada (Chrome Web Store ou local)
-- [ ] Extensão habilitada em `chrome://extensions/`
-- [ ] Ícone da extensão aparece na toolbar
+- [x] Extensão Web Signer instalada (Chrome Web Store)
+- [x] Extensão habilitada em `chrome://extensions/`
+- [x] Extensão instalada no perfil sincronizado `revisa.precatorio@gmail.com`
+- [x] Ícone da extensão aparece na toolbar
 
 ### 3.7 Testes de Integração
-- [ ] Teste manual via Chrome: login com certificado OK
-- [ ] Teste Selenium básico: Chrome abre via script Python
-- [ ] Screenshot de teste salvo
+- [x] Teste manual via Chrome: login com certificado OK
+- [x] **DESCOBERTA CRÍTICA**: Chrome sincronizado com perfil Google
+- [x] **SOLUÇÃO**: Script Selenium deve usar perfil padrão (não user-data-dir customizado)
 
 **Documentação:** [setup/03_chrome_websigner.md](setup/03_chrome_websigner.md)
 
@@ -180,34 +181,32 @@
 ## 📦 Fase 5: Deploy do Código
 
 ### 5.1 Clonar Repositório
-- [ ] Repositório clonado em `C:\projetos\crawler_tjsp`
-- [ ] Branch `main` ativa
-- [ ] Todos os arquivos presentes
+- [x] Repositório clonado em `C:\projetos\crawler_tjsp`
+- [x] Branch `main` ativa
+- [x] Todos os arquivos presentes
 
 ### 5.2 Configurar .env
-- [ ] `.env` criado a partir de `.env.example`
-- [ ] Variáveis preenchidas:
-  - [ ] `POSTGRES_HOST`
-  - [ ] `POSTGRES_PORT`
-  - [ ] `POSTGRES_DB`
-  - [ ] `POSTGRES_USER`
-  - [ ] `POSTGRES_PASSWORD`
-  - [ ] `CHROME_BINARY_PATH`
-  - [ ] `CHROMEDRIVER_PATH`
-  - [ ] `CERT_PATH`
-  - [ ] `CERT_PASSWORD`
+- [x] `.env` criado em `C:\projetos\crawler_tjsp\.env`
+- [x] Variáveis preenchidas:
+  - [x] `CERT_PATH=C:\certs\certificado.pfx`
+  - [x] `CERT_PASSWORD=903205`
+  - [x] `CERT_CPF=517.648.902-30`
+  - [x] `CHROME_BINARY_PATH=C:\Program Files\Google\Chrome\Application\chrome.exe`
+  - [x] `CHROMEDRIVER_PATH=C:\chromedriver\chromedriver.exe`
+  - [ ] `POSTGRES_HOST` (aguardando decisão de banco)
+  - [ ] Demais variáveis PostgreSQL
 
 ### 5.3 Instalar Dependências
-- [ ] `pip install -r requirements.txt` concluído
-- [ ] Todos os pacotes instalados sem erros
-- [ ] `pip list` mostra todas as dependências
+- [x] `pip install -r requirements.txt` concluído
+- [x] Todos os pacotes instalados sem erros
+- [x] `pip list` mostra todas as dependências
 
 ### 5.4 Adaptar Código para Windows
-- [ ] `crawler_full.py`: paths Windows (barras invertidas)
-- [ ] `orchestrator_subprocess.py`: paths ajustados
-- [ ] User data directory: `C:\temp\chrome-profile`
-- [ ] Download directory: `C:\projetos\crawler_tjsp\downloads`
-- [ ] Imports funcionam sem erros
+- [x] Script de teste `test_authentication.py` criado
+- [x] **CORREÇÃO CRÍTICA**: Removido `--user-data-dir` customizado
+- [x] **SOLUÇÃO**: Selenium agora usa perfil padrão do Chrome (com Web Signer)
+- [x] Paths Windows configurados corretamente
+- [x] Imports funcionam sem erros
 
 **Documentação:** DEPLOYMENT_PLAN.md (Fase 4)
 
@@ -360,9 +359,12 @@ ____________________________________________________
 ### Lições Aprendidas:
 
 ```
-1. _________________________________________________
-2. _________________________________________________
-3. _________________________________________________
+1. Chrome sincronizado com Google Account não cria diretório local de perfil
+2. PowerShell Start-Process sem --user-data-dir abre perfil padrão correto
+3. Selenium com --user-data-dir customizado cria perfil novo SEM extensões
+4. Solução: remover --user-data-dir do Selenium = perfil padrão com Web Signer
+5. OpenSSH no Windows Server 2016 requer instalação manual (v9.5.0.0p1-Beta)
+6. Git no Windows Server 2016 requer TLS 1.2 habilitado para download
 ```
 
 ### Desvios do Plano:

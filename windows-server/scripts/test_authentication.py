@@ -35,7 +35,8 @@ from datetime import datetime
 
 CHROME_BINARY = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
 CHROMEDRIVER_PATH = r"C:\chromedriver\chromedriver.exe"
-USER_DATA_DIR = r"C:\temp\chrome-profile-test"
+# NÃO USAR user-data-dir customizado! Deixar Chrome usar perfil padrão (onde Web Signer está instalado)
+USER_DATA_DIR = None  # Alterado de r"C:\temp\chrome-profile-test"
 EXTENSION_PATH = r"C:\projetos\crawler_tjsp\chrome_extension"
 SCREENSHOTS_DIR = r"C:\projetos\crawler_tjsp\screenshots"
 LOG_FILE = r"C:\projetos\crawler_tjsp\logs\test_auth.log"
@@ -71,9 +72,6 @@ def setup_chrome():
     """Configura e retorna instância do Chrome via Selenium."""
     log("🔧 Configurando Chrome...")
 
-    # Criar user data dir se não existir
-    os.makedirs(USER_DATA_DIR, exist_ok=True)
-
     # Opções do Chrome
     chrome_options = Options()
     chrome_options.binary_location = CHROME_BINARY
@@ -81,7 +79,16 @@ def setup_chrome():
     # Configurações importantes
     chrome_options.add_argument("--start-maximized")
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-    chrome_options.add_argument(f"--user-data-dir={USER_DATA_DIR}")
+
+    # NÃO adicionar --user-data-dir! Deixar Chrome usar perfil padrão (revisa.precatorio@gmail.com)
+    # Isso replica o comportamento do PowerShell Start-Process que abre o perfil correto
+    # Se adicionarmos user-data-dir, Chrome cria perfil novo sem Web Signer
+    if USER_DATA_DIR:
+        os.makedirs(USER_DATA_DIR, exist_ok=True)
+        chrome_options.add_argument(f"--user-data-dir={USER_DATA_DIR}")
+        log(f"  ⚠️ Usando perfil customizado: {USER_DATA_DIR}")
+    else:
+        log(f"  ✅ Usando perfil padrão do Chrome (onde Web Signer está instalado)")
 
     # Carregar extensão Web Signer (se existir localmente)
     if os.path.exists(EXTENSION_PATH):
