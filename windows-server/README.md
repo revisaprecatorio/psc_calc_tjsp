@@ -57,7 +57,8 @@ windows-server/
 ├── README.md                          # Este arquivo (Status geral)
 ├── DEPLOYMENT_PLAN.md                 # Plano detalhado de deploy
 ├── MIGRATION_CHECKLIST.md             # Checklist de migração (atualizado)
-├── CHROME_PROFILE_FIX.md              # ✨ NOVO: Documentação da correção crítica
+├── CHROME_PROFILE_FIX.md              # ✨ Documentação da correção crítica
+├── TESTE_FASE_5.md                    # ✨ NOVO: Guia completo de testes
 ├── CREDENTIALS.md                     # Credenciais (protegido por .gitignore)
 ├── QUICKSTART.md                      # Guia rápido de execução
 ├── EXECUTE_NOW.md                     # Instruções de execução imediata
@@ -69,7 +70,8 @@ windows-server/
 │   └── 05_crawler_deployment.md      # Deploy do crawler + worker
 ├── scripts/
 │   ├── setup-simple.ps1              # Script instalação automatizada
-│   ├── test_authentication.py        # ✨ CORRIGIDO: Teste de autenticação
+│   ├── test_authentication.py        # ✨ TESTE #1: Login com certificado
+│   ├── test_direct_process_access.py # ✨ NOVO: TESTE #2: Acesso direto
 │   └── start_services.ps1            # Iniciar crawler + orchestrator
 └── docs/
     ├── windows_vs_linux.md           # Comparativo de arquitetura

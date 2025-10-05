@@ -1,12 +1,12 @@
 """
-Test de Autenticação - e-SAJ TJSP com Certificado Digital
-=========================================================
+TESTE #1 - Autenticação com Certificado Digital (Login Manual)
+================================================================
 
 Este script testa a autenticação no e-SAJ usando certificado digital A1
 via Web Signer (Native Messaging Protocol).
 
-IMPORTANTE: Este é o teste crítico que valida se a migração para Windows
-resolveu o bloqueio do Native Messaging Protocol.
+OBJETIVO: Validar que Native Messaging Protocol funciona no Windows Server
+RESULTADO ESPERADO: Login bem-sucedido após seleção manual do certificado
 
 Uso:
     python test_authentication.py
@@ -17,6 +17,8 @@ Pré-requisitos:
     - Web Signer rodando
     - Certificado A1 importado no Windows Certificate Store
     - Extensão Web Signer carregada no Chrome
+
+Próximo Teste: test_direct_process_access.py (acesso direto a processo)
 """
 
 from selenium import webdriver
