@@ -362,9 +362,14 @@ ____________________________________________________
 1. Chrome sincronizado com Google Account não cria diretório local de perfil
 2. PowerShell Start-Process sem --user-data-dir abre perfil padrão correto
 3. Selenium com --user-data-dir customizado cria perfil novo SEM extensões
-4. Solução: remover --user-data-dir do Selenium = perfil padrão com Web Signer
-5. OpenSSH no Windows Server 2016 requer instalação manual (v9.5.0.0p1-Beta)
-6. Git no Windows Server 2016 requer TLS 1.2 habilitado para download
+4. Solução: USAR --user-data-dir + --profile-directory=Default (não remover!)
+5. NUNCA usar --load-extension com perfis sincronizados (cria perfil temporário)
+6. chrome://version é fonte confiável para descobrir Profile Path
+7. Chrome manual aberto BLOQUEIA Selenium (DevToolsActivePort error)
+8. Sempre fechar Chrome antes de executar testes Selenium
+9. Sessão autenticada PERSISTE no perfil Default (ganho de performance)
+10. OpenSSH no Windows Server 2016 requer instalação manual (v9.5.0.0p1-Beta)
+11. Git no Windows Server 2016 requer TLS 1.2 habilitado para download
 ```
 
 ### Desvios do Plano:
