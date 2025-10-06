@@ -24,8 +24,8 @@ from datetime import datetime
 # CONFIGURAÇÕES
 # ====================
 
-# Localização do arquivo de cookies do Chrome (perfil Default)
-CHROME_COOKIES_PATH = r"C:\Users\Administrator\AppData\Local\Google\Chrome\User Data\Default\Network\Cookies"
+# Localização do arquivo de cookies do Chrome (perfil Profile 1 - revisa.precatorio@gmail.com)
+CHROME_COOKIES_PATH = r"C:\Users\Administrator\AppData\Local\Google\Chrome\User Data\Profile 1\Network\Cookies"
 
 # Onde salvar cookies extraídos
 SAVED_COOKIES_DIR = r"C:\projetos\crawler_tjsp\saved_cookies"
@@ -54,7 +54,7 @@ def check_chrome_closed():
 def extract_cookies():
     """Extrai cookies do Chrome."""
     print("=" * 70)
-    print("EXTRAÇÃO DE COOKIES - PERFIL DEFAULT CHROME")
+    print("EXTRAÇÃO DE COOKIES - PERFIL PROFILE 1 CHROME")
     print("=" * 70)
     print("")
 
@@ -80,7 +80,7 @@ def extract_cookies():
         print("  ERRO: Arquivo de cookies não encontrado!")
         print("")
         print("TROUBLESHOOTING:")
-        print("  1. Verifique se perfil Default está correto")
+        print("  1. Verifique se perfil Profile 1 está correto")
         print("  2. Você fez login no Chrome pelo menos uma vez?")
         print("")
         return False
@@ -131,7 +131,7 @@ def extract_cookies():
             print("  3. Cookies foram limpos")
             print("")
             print("SOLUÇÃO:")
-            print("  1. Abra Chrome (perfil Default)")
+            print("  1. Abra Chrome (perfil Profile 1 - revisa.precatorio@gmail.com)")
             print("  2. Acesse: https://esaj.tjsp.jus.br/esaj/portal.do")
             print("  3. Faça login com certificado digital")
             print("  4. Feche Chrome")
@@ -212,7 +212,7 @@ if __name__ == "__main__":
     print("=" * 70)
     print("")
     print("ESTE SCRIPT VAI:")
-    print("  1. Ler cookies do perfil Default do Chrome")
+    print("  1. Ler cookies do perfil Profile 1 do Chrome (revisa.precatorio@gmail.com)")
     print("  2. Filtrar apenas cookies do domínio tjsp.jus.br")
     print("  3. Salvar em arquivo para uso no Selenium")
     print("")
@@ -226,7 +226,7 @@ if __name__ == "__main__":
     if confirm.upper() != "SIM":
         print("")
         print("Por favor, faça login primeiro:")
-        print("  1. Abra Chrome (clique no ícone - perfil Default)")
+        print("  1. Abra Chrome (perfil Profile 1 - revisa.precatorio@gmail.com)")
         print("  2. Acesse: https://esaj.tjsp.jus.br/esaj/portal.do")
         print("  3. Clique em 'Certificado Digital'")
         print("  4. Selecione seu certificado")
