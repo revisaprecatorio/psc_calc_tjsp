@@ -39,10 +39,12 @@ from datetime import datetime
 CHROME_BINARY = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
 CHROMEDRIVER_PATH = r"C:\chromedriver\chromedriver.exe"
 
-# CORREÇÃO CRÍTICA: Usar perfil Default do Chrome (onde Web Signer está instalado)
-# Descoberto via chrome://version: Profile Path = C:\Users\Administrator\AppData\Local\Google\Chrome\User Data\Default
-USER_DATA_DIR = r"C:\Users\Administrator\AppData\Local\Google\Chrome\User Data"
-PROFILE_DIRECTORY = "Default"
+# SOLUÇÃO HÍBRIDA: Perfil temporário + Argumentos Windows Server
+# BUG: --user-data-dir + --profile-directory causam "DevToolsActivePort file doesn't exist" no Windows Server
+# SOLUÇÃO: Usar perfil temporário com argumentos de estabilidade
+USER_DATA_DIR_TEMP = r"C:\temp\selenium-chrome-profile"
+# Perfil Default (para referência/cópia de cookies se necessário)
+USER_DATA_DIR_DEFAULT = r"C:\Users\Administrator\AppData\Local\Google\Chrome\User Data\Default"
 
 SCREENSHOTS_DIR = r"C:\projetos\crawler_tjsp\screenshots"
 LOG_FILE = r"C:\projetos\crawler_tjsp\logs\test_direct_access.log"
@@ -102,45 +104,61 @@ def save_page_source(driver, name):
 def setup_chrome():
     """Configura e retorna instância do Chrome via Selenium."""
     log("🔧 Configurando Chrome...")
-    log(f"  📁 User Data Dir: {USER_DATA_DIR}")
-    log(f"  👤 Profile: {PROFILE_DIRECTORY}")
+    log(f"  📁 User Data Dir (temp): {USER_DATA_DIR_TEMP}")
+    log(f"  📁 Profile Default (referência): {USER_DATA_DIR_DEFAULT}")
+
+    # Criar diretório temporário se não existir
+    os.makedirs(USER_DATA_DIR_TEMP, exist_ok=True)
+    log(f"  ✅ Diretório temporário criado/verificado")
 
     # Opções do Chrome
     chrome_options = Options()
     chrome_options.binary_location = CHROME_BINARY
 
-    # CRÍTICO: Usar perfil Default onde Web Signer está instalado
-    # Replicar exatamente o comportamento do Chrome manual (clicar no ícone)
-    chrome_options.add_argument(f"--user-data-dir={USER_DATA_DIR}")
-    chrome_options.add_argument(f"--profile-directory={PROFILE_DIRECTORY}")
-    log(f"  ✅ Usando perfil Default do Chrome (Web Signer já instalado)")
+    # SOLUÇÃO HÍBRIDA: Usar perfil temporário + argumentos Windows Server
+    chrome_options.add_argument(f"--user-data-dir={USER_DATA_DIR_TEMP}")
+    log(f"  ✅ Usando perfil temporário (evita bug Windows Server)")
+
+    # ARGUMENTOS CRÍTICOS para Windows Server (resolvem DevToolsActivePort error)
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--disable-software-rasterizer")
+    log(f"  ✅ Argumentos Windows Server aplicados")
 
     # Configurações importantes
     chrome_options.add_argument("--start-maximized")
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-
-    # NÃO carregar extensão local! Web Signer já está instalado no perfil Default
-    log(f"  ✅ Web Signer será carregado do perfil (não precisa --load-extension)")
+    chrome_options.add_argument("--ignore-certificate-errors")
+    chrome_options.add_argument("--allow-running-insecure-content")
 
     # Preferências
     prefs = {
         "download.default_directory": r"C:\projetos\crawler_tjsp\downloads",
         "download.prompt_for_download": False,
-        "plugins.always_open_pdf_externally": True
+        "plugins.always_open_pdf_externally": True,
+        "profile.default_content_setting_values.notifications": 2,  # Bloquear notificações
     }
     chrome_options.add_experimental_option("prefs", prefs)
-    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation", "enable-logging"])
     chrome_options.add_experimental_option("useAutomationExtension", False)
 
     # Service (ChromeDriver)
     service = Service(executable_path=CHROMEDRIVER_PATH)
 
     try:
+        log("  🚀 Iniciando Chrome...")
         driver = webdriver.Chrome(service=service, options=chrome_options)
         log("  ✅ Chrome iniciado com sucesso!")
+
+        # Configurar timeouts
+        driver.set_page_load_timeout(60)
+        driver.implicitly_wait(10)
+
         return driver
     except Exception as e:
         log(f"  ❌ Erro ao iniciar Chrome: {e}", "ERROR")
+        log(f"  💡 Dica: Verifique se ChromeDriver é compatível com Chrome", "INFO")
         raise
 
 def do_login(driver):
