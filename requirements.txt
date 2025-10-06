@@ -8,4 +8,5 @@ selenium==4.25.0
 requests
 psycopg2-binary
 python-dotenv
-tabulatepsutil
+tabulate
+psutil
