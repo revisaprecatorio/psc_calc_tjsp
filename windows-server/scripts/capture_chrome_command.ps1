@@ -1,16 +1,16 @@
-# Script para capturar linha de comando exata do Chrome em execução
-# Execute com Chrome aberto pelo ícone (perfil revisa.precatorio@gmail.com)
+# Script para capturar linha de comando exata do Chrome em execucao
+# Execute com Chrome aberto pelo icone (perfil revisa.precatorio@gmail.com)
 
 $outputFile = "C:\projetos\crawler_tjsp\chrome_command_line.txt"
 
-Write-Host "🔍 Capturando linha de comando do Chrome..." -ForegroundColor Cyan
+Write-Host "Capturando linha de comando do Chrome..." -ForegroundColor Cyan
 Write-Host ""
 
 # Pegar todos os processos Chrome
 $chromeProcesses = Get-Process chrome -ErrorAction SilentlyContinue
 
 if ($chromeProcesses) {
-    Write-Host "✅ Encontrados $($chromeProcesses.Count) processos Chrome" -ForegroundColor Green
+    Write-Host "Encontrados $($chromeProcesses.Count) processos Chrome" -ForegroundColor Green
     Write-Host ""
 
     # Criar arquivo de output
@@ -22,7 +22,7 @@ if ($chromeProcesses) {
     # Pegar processo principal (primeiro)
     $mainProcess = $chromeProcesses | Select-Object -First 1
 
-    Write-Host "📌 Processo Principal:" -ForegroundColor Yellow
+    Write-Host "Processo Principal:" -ForegroundColor Yellow
     Write-Host "  PID: $($mainProcess.Id)" -ForegroundColor White
     Write-Host "  Path: $($mainProcess.Path)" -ForegroundColor White
     Write-Host ""
@@ -37,10 +37,12 @@ if ($chromeProcesses) {
         $commandLine = (Get-WmiObject Win32_Process -Filter "ProcessId = $($mainProcess.Id)").CommandLine
 
         if ($commandLine) {
-            Write-Host "✅ Linha de comando capturada com sucesso!" -ForegroundColor Green
+            Write-Host "Linha de comando capturada com sucesso!" -ForegroundColor Green
             Write-Host ""
             Write-Host "COMMAND LINE (primeiros 200 caracteres):" -ForegroundColor Cyan
-            Write-Host $commandLine.Substring(0, [Math]::Min(200, $commandLine.Length)) -ForegroundColor White
+
+            $previewLength = [Math]::Min(200, $commandLine.Length)
+            Write-Host $commandLine.Substring(0, $previewLength) -ForegroundColor White
             Write-Host "..." -ForegroundColor Gray
             Write-Host ""
 
@@ -63,12 +65,12 @@ if ($chromeProcesses) {
             }
 
         } else {
-            Write-Host "❌ Linha de comando vazia" -ForegroundColor Red
+            Write-Host "Linha de comando vazia" -ForegroundColor Red
             "ERRO: Linha de comando vazia" | Out-File -FilePath $outputFile -Append -Encoding UTF8
         }
 
     } catch {
-        Write-Host "❌ Erro ao capturar: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "Erro ao capturar: $($_.Exception.Message)" -ForegroundColor Red
         "ERRO: $($_.Exception.Message)" | Out-File -FilePath $outputFile -Append -Encoding UTF8
     }
 
@@ -81,20 +83,20 @@ if ($chromeProcesses) {
         "PID: $($proc.Id) | StartTime: $($proc.StartTime)" | Out-File -FilePath $outputFile -Append -Encoding UTF8
     }
 
-    Write-Host "📄 Arquivo salvo em: $outputFile" -ForegroundColor Green
+    Write-Host "Arquivo salvo em: $outputFile" -ForegroundColor Green
     Write-Host ""
-    Write-Host "✅ Captura concluída!" -ForegroundColor Green
+    Write-Host "Captura concluida!" -ForegroundColor Green
     Write-Host ""
     Write-Host "Abra o arquivo para ver comando completo:" -ForegroundColor Cyan
     Write-Host "  notepad $outputFile" -ForegroundColor White
 
 } else {
-    Write-Host "❌ Chrome não está em execução!" -ForegroundColor Red
+    Write-Host "Chrome nao esta em execucao!" -ForegroundColor Red
     Write-Host ""
     Write-Host "Por favor:" -ForegroundColor Yellow
-    Write-Host "  1. Abra Chrome clicando no ícone (perfil revisa.precatorio@gmail.com)" -ForegroundColor White
+    Write-Host "  1. Abra Chrome clicando no icone (perfil revisa.precatorio@gmail.com)" -ForegroundColor White
     Write-Host "  2. Execute este script novamente" -ForegroundColor White
     Write-Host ""
 
-    "ERRO: Chrome não está em execução" | Out-File -FilePath $outputFile -Encoding UTF8
+    "ERRO: Chrome nao esta em execucao" | Out-File -FilePath $outputFile -Encoding UTF8
 }
