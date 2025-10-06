@@ -59,6 +59,9 @@ windows-server/
 ├── MIGRATION_CHECKLIST.md             # Checklist de migração (atualizado)
 ├── CHROME_PROFILE_FIX.md              # ✨ Documentação da correção crítica
 ├── TESTE_FASE_5.md                    # ✨ NOVO: Guia completo de testes
+├── BACKUP_GUIDE.md                    # 💾 Guia completo de backup (8 etapas)
+├── RESTORE_GUIDE.md                   # 🔄 Guia de restore (snapshot + manual)
+├── QUICK_BACKUP.md                    # ⚡ Guia executivo de 5 passos (30-45 min)
 ├── CREDENTIALS.md                     # Credenciais (protegido por .gitignore)
 ├── QUICKSTART.md                      # Guia rápido de execução
 ├── EXECUTE_NOW.md                     # Instruções de execução imediata
@@ -70,6 +73,8 @@ windows-server/
 │   └── 05_crawler_deployment.md      # Deploy do crawler + worker
 ├── scripts/
 │   ├── setup-simple.ps1              # Script instalação automatizada
+│   ├── backup_complete_system.ps1    # 💾 Backup automático completo
+│   ├── export_certificado.ps1        # 🔐 Export certificado digital
 │   ├── test_authentication.py        # ✨ TESTE #1: Login com certificado
 │   ├── test_direct_process_access.py # ✨ NOVO: TESTE #2: Acesso direto
 │   └── start_services.ps1            # Iniciar crawler + orchestrator
@@ -202,12 +207,47 @@ Isso permite que Chrome use perfil padrão (sincronizado) onde Web Signer está 
 1. ✅ **Credenciais recebidas e ambiente configurado**
 2. ✅ **Fases 1-4 concluídas**
 3. ✅ **Correção crítica de perfil Chrome aplicada**
-4. ⏳ **Executar teste de autenticação no servidor** (Fase 5)
-5. ⏳ **Validar Native Messaging Protocol funcionando**
-6. ⏳ **Avançar para Fase 6 (Worker) e Fase 7 (Produção)**
+4. 💾 **NOVO: Backup completo antes de upgrade para WS2025**
+   - Consultar: `QUICK_BACKUP.md` (guia de 5 passos, 30-45 min)
+   - Ou: `BACKUP_GUIDE.md` (guia completo detalhado)
+   - Scripts prontos: `backup_complete_system.ps1` e `export_certificado.ps1`
+5. ⏳ **Executar teste de autenticação no servidor** (Fase 5)
+6. ⏳ **Validar Native Messaging Protocol funcionando**
+7. ⏳ **Avançar para Fase 6 (Worker) e Fase 7 (Produção)**
 
 ---
 
-**Última atualização:** 2025-10-05
+## 💾 Backup e Upgrade (NOVO)
+
+**Se for fazer upgrade para Windows Server 2025:**
+
+### Guia Rápido (30-45 min):
+```markdown
+1. Ler: QUICK_BACKUP.md
+2. Criar snapshot Contabo (CRÍTICO!)
+3. Executar: .\scripts\backup_complete_system.ps1
+4. Transferir ZIP para local seguro
+5. Validar hash MD5
+6. ✅ Pronto para upgrade!
+```
+
+### Se precisar restaurar:
+```markdown
+- Método 1: Restore via snapshot Contabo (10-20 min)
+- Método 2: Restore manual via backup ZIP (2-4 horas)
+- Consultar: RESTORE_GUIDE.md
+```
+
+### Instalação Limpa do ZERO (Recomendado):
+```markdown
+- Guia completo: FRESH_INSTALL_WS2025.md
+- Tempo: 3-4 horas
+- Zero heranças, sistema 100% limpo
+- Todas as 8 fases documentadas passo a passo
+```
+
+---
+
+**Última atualização:** 2025-10-06
 **Responsável:** Persival Balleste
-**Status:** 🟡 Fase 5 em andamento - Aguardando execução de teste
+**Status:** 🟡 Fase 5 em andamento + 💾 Sistema de backup implementado
