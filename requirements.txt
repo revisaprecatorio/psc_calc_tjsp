@@ -1,0 +1,13 @@
+# ===== Core (obrigatórios) =====
+selenium==4.25.0
+webdriver-manager==4.0.2
+
+# ===== Opcionais (comente/descomente conforme a necessidade) =====
+# Robustez de tentativas/retry em chamadas de navegador
+# tenacity==9.0.0
+
+# Se for preciso burlar detecção de automação em alguns sites (não é usado no script atual)
+# undetected-chromedriver==3.5.5
+
+# Carregar variáveis de ambiente de um .env (não é usado no script atual)
+# python-dotenv==1.0.1
