@@ -410,7 +410,88 @@ def fill_calc(driver,
         time.sleep(0.2)
         btn.click()
 
-def wait_and_capture_result(driver, timeout_calc: int, out_dir: Path, debug_screens: bool, valor_precatorio_cli: Optional[str]):
+import re
+
+def _norm_key(label: str) -> str:
+    """Normaliza o texto do label para snake_case sem acento."""
+    s = strip_accents(label).strip().lower()
+    s = s.replace("%", " pct").replace("+", " mais ").replace("(", " ").replace(")", " ").replace("/", " ")
+    s = re.sub(r"[^a-z0-9]+", "_", s)
+    s = re.sub(r"_+", "_", s).strip("_")
+    return s
+
+def extract_result_pairs(block) -> dict:
+    """
+    Varre o bloco de resultados e retorna {chave_normalizada: valor_float}.
+    Estrutura típica do HTML da calculadora PSC:
+      <div class="data-container"><span class="psc-text-...">Rótulo</span></div>
+      <div class="data-container"><span data-expression>107.079,46</span></div>
+    Também cobre casos onde label e valor estão no mesmo container.
+    """
+    pairs = {}
+    containers = block.find_elements(By.CSS_SELECTOR, "div.data-container")
+    last_label = None
+
+    for ct in containers:
+        lbl_el = None
+        val_el = None
+
+        # tenta encontrar label e valor dentro do container
+        try:
+            lbl_el = next(iter([
+                e for e in ct.find_elements(By.CSS_SELECTOR, "span")
+                if "psc-text" in (e.get_attribute("class") or "")
+                and "icon" not in (e.get_attribute("class") or "")
+            ]), None)
+        except Exception:
+            pass
+
+        try:
+            val_els = ct.find_elements(By.CSS_SELECTOR, "span[data-expression]")
+            if val_els:
+                val_el = val_els[0]
+        except Exception:
+            pass
+
+        # caso 1: label e valor no mesmo container
+        if lbl_el is not None and val_el is not None:
+            key = _norm_key(lbl_el.text or "")
+            val = parse_currency_pt(val_el.text or "")
+            if key:
+                pairs[key] = val
+            last_label = None
+            continue
+
+        # caso 2: só label
+        if lbl_el is not None and val_el is None:
+            last_label = lbl_el.text or ""
+            continue
+
+        # caso 3: só valor e label do container anterior
+        if lbl_el is None and val_el is not None and last_label:
+            key = _norm_key(last_label)
+            val = parse_currency_pt(val_el.text or "")
+            if key:
+                pairs[key] = val
+            last_label = None
+            continue
+
+    return pairs
+
+
+def wait_and_capture_result(
+    driver,
+    timeout_calc: int,
+    out_dir: Path,
+    debug_screens: bool,
+    valor_precatorio_cli: Optional[str],
+    numero_precatorio: Optional[str] = None
+):
+    """
+    Aguarda o resultado do cálculo e salva todos os campos da calculadora em JSON.
+    O arquivo gerado segue o padrão:
+      resultado_calc_<numero_do_precatorio>_<data>.json
+    """
     texto = ""
     with stage("Calculadora / aguardar resultado"):
         block = WebDriverWait(driver, timeout_calc).until(
@@ -418,41 +499,38 @@ def wait_and_capture_result(driver, timeout_calc: int, out_dir: Path, debug_scre
         )
         scroll_into_view(driver, block)
         time.sleep(0.3)
-        try: texto = (block.text or "").strip()
-        except Exception: texto = ""
+        try:
+            texto = (block.text or "").strip()
+        except Exception:
+            texto = ""
         logging.info(f"[info] len(texto_resultado)={len(texto)}")
 
-    # ===== Captura dos campos solicitados =====
-    # As variações de rótulo cobrem exatamente o que aparece no HTML das suas capturas.
-    valor_bruto_precatorio = find_first_by_labels(driver, ["Valor Bruto", "Valor Bruto Precatório", "Valor Bruto Precatorio"])
-    base_calculo_liquida    = find_first_by_labels(driver, ["Base de Cálculo Líquida", "Base de Calculo Liquida"])
-    ir_calculado            = find_first_by_labels(driver, ["IR Calculado", "IR calculado"])
-    prev_fgts_assist        = find_first_by_labels(driver, ["FGTS + Assistência", "FGTS + Assist.", "Prev. FGTS+Assist.", "FGTS + Assistencia"])
-    valor_liquido_cedivel   = find_first_by_labels(driver, ["Valor Líquido Cedível", "Valor Liquido Cedivel"])
+    # --- coleta genérica de TODOS os campos visíveis ---
+    pares = extract_result_pairs(block)
 
-    # Fallback direto no texto visível (inclusive para zeros)
-    def fallback(lbl: str, current: float) -> float:
-        if current or current == 0.0:
-            return current
-        idx = strip_accents(texto).lower().find(strip_accents(lbl).lower())
-        trecho = texto[idx: idx+160] if idx != -1 else ""
-        v = parse_currency_pt(trecho)
-        return v if (v or v == 0.0) else current
+    # aliases úteis para chaves canônicas
+    aliases = {
+        "valor_bruto_precatorio": ["valor_bruto", "valor_bruto_precatorio"],
+        "base_calculo_liquida":   ["base_de_calculo_liquida", "base_calculo_liquida"],
+        "ir_calculado":           ["ir_calculado"],
+        "prev_fgts_assistencia":  ["fgts_assistencia", "prev_fgts_assist", "fgts_mais_assistencia"],
+        "valor_liquido_cedivel":  ["valor_liquido_cedivel", "valor_liquido_cedivel_"],
+    }
+    canon = {}
+    for kcanon, candidates in aliases.items():
+        for c in candidates:
+            if c in pares:
+                canon[kcanon] = pares[c]
+                break
 
-    valor_bruto_precatorio = fallback("Valor Bruto", valor_bruto_precatorio)
-    valor_bruto_precatorio = fallback("Valor Bruto Precatório", valor_bruto_precatorio)
-    base_calculo_liquida   = fallback("Base de Cálculo Líquida", base_calculo_liquida)
-    ir_calculado           = fallback("IR Calculado", ir_calculado)
-    prev_fgts_assist       = fallback("FGTS + Assistência", prev_fgts_assist)
-    valor_liquido_cedivel  = fallback("Valor Líquido Cedível", valor_liquido_cedivel)
-
-    # Sanity simples: VLC não pode explodir 20x o valor informado
+    # sanity check simples com valor_liquido_cedivel
     try:
         vp_cli_norm = normalize_brl_input(valor_precatorio_cli) if valor_precatorio_cli else None
         vp_float = parse_currency_pt(vp_cli_norm) if vp_cli_norm else 0.0
-        if vp_float > 0 and valor_liquido_cedivel > vp_float * 20:
+        vlc = canon.get("valor_liquido_cedivel", 0.0)
+        if vp_float > 0 and vlc > vp_float * 20:
             raise RuntimeError(
-                f"Sanity check falhou: VLC ({valor_liquido_cedivel:,.2f}) >> Valor do Precatório ({vp_float:,.2f})."
+                f"Sanity check falhou: VLC ({vlc:,.2f}) >> Valor do Precatório ({vp_float:,.2f})."
             )
     except Exception as sc_err:
         logging.error(str(sc_err))
@@ -464,21 +542,22 @@ def wait_and_capture_result(driver, timeout_calc: int, out_dir: Path, debug_scre
         "url": driver.current_url,
         "texto_len": len(texto),
         "preview": (texto[:800] + "..." if len(texto) > 800 else texto),
-
-        # --- Campos solicitados ---
-        "valor_bruto_precatorio": valor_bruto_precatorio,
-        "base_calculo_liquida": base_calculo_liquida,
-        "ir_calculado": ir_calculado,
-        "prev_fgts_assist": prev_fgts_assist,
-        "valor_liquido_cedivel": valor_liquido_cedivel,
-
-        # útil para auditoria
+        "campos": pares,
+        "campos_canonicos": canon,
         "valor_precatorio_cli": valor_precatorio_cli,
     }
-    json_path = out_dir / f"resultado_calc_{_ts()}.json"
+
+    # --- nome personalizado do arquivo ---
+    numero = (numero_precatorio or "0000000").replace("-", "").replace(".", "")
+    data_str = time.strftime("%Y%m%d_%H%M%S")
+    json_filename = f"resultado_calc_{numero}_{data_str}.json"
+    json_path = out_dir / json_filename
+
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
+
     logging.info(f"[SAVE] {json_path}")
+
 
 # ===================== CLI =====================
 def get_parser():
@@ -527,7 +606,18 @@ def main():
                   timeout=args.timeout,
                   debug_dir=out_dir,
                   debug_screens=args.debug_screens)
-        wait_and_capture_result(driver, args.timeout_calc, out_dir, args.debug_screens, valor_precatorio_cli)
+        #wait_and_capture_result(driver, args.timeout_calc, out_dir, args.debug_screens, valor_precatorio_cli)
+
+        wait_and_capture_result(
+                                driver,
+                                args.timeout_calc,
+                                out_dir,
+                                args.debug_screens,
+                                valor_precatorio_cli,
+                                args.numero_precatorio
+                            )
+
+
         logging.info("[OK] Fluxo concluído.")
     except Exception as e:
         logging.exception("[FATAL] Erro no fluxo.")
