@@ -13,6 +13,10 @@ Requisitos:
   pip install selenium
   (opcional para fallback HTTP) pip install requests
 """
+import sys
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
 
 import argparse, json, re, sys, time, traceback, unicodedata, urllib.parse
 from datetime import datetime
@@ -123,122 +127,102 @@ def _http_download_with_cookies(url, driver, outdir, filename=None, referer=None
 def _build_chrome(attach, user_data_dir, cert_issuer_cn, cert_subject_cn,
                   debugger_address=None, headless=False, download_dir="downloads"):
     """
-    Cria Chrome via Selenium Grid (Remote WebDriver) ou local (fallback).
-    
-    Se SELENIUM_REMOTE_URL estiver definido no ambiente, conecta ao Grid.
-    Caso contrário, usa Chrome local (para desenvolvimento).
-    
-    Selenium Grid resolve o problema "user data directory is already in use"
-    porque o Chrome roda em container separado e otimizado.
+    Cria um Chrome WebDriver com:
+      - Perfil do usuário (user-data-dir), para reutilizar sessão/certificados
+      - Policy de auto-seleção de certificado do ESAJ
+      - Preferências de download
+    Usa Selenium Grid SOMENTE se a variável de ambiente SELENIUM_REMOTE_URL estiver definida.
+    Caso contrário, usa Chrome local. Tenta anexar a um Chrome já aberto se DEBUGGER_ADDRESS for informado.
     """
-    import os as _os
-    
-    # Verifica se deve usar Selenium Grid ou ChromeDriver local
+    import os as _os, json
+    from pathlib import Path
+    from selenium import webdriver
+    from selenium.webdriver.chrome.options import Options
+    from selenium.common.exceptions import WebDriverException
+
     selenium_remote_url = _os.environ.get("SELENIUM_REMOTE_URL")
-    # Se não tiver SELENIUM_REMOTE_URL, usa ChromeDriver local (Xvfb)
-    use_local_chromedriver = not selenium_remote_url
-    
+
+    # ---- opções do Chrome (compartilhadas por todos os modos) ----
     def make_options():
         opts = Options()
-        
-        # Headless: FALSE quando usar Xvfb (precisa de display virtual)
-        # TRUE apenas se for Grid ou desenvolvimento local
-        _headless = headless
-        if use_local_chromedriver:
-            # Xvfb: NÃO usar headless (precisa do display virtual)
-            _headless = False
-        
-        if _headless:
-            try: opts.add_argument("--headless=new")
-            except Exception: opts.add_argument("--headless")
-        
-        # Flags essenciais
+
+        # Atenção: client-cert NÃO funciona em headless; se alguém ativar, avisamos e ignoramos.
+        if headless:
+            print("[WARN] Headless solicitado, mas login por certificado não funciona em headless. Ignorando.", flush=True)
+
+        # Estabilidade
         opts.add_argument("--disable-gpu")
         opts.add_argument("--disable-dev-shm-usage")
         opts.add_argument("--no-sandbox")
         opts.add_argument("--window-size=1920,1080")
         opts.add_argument("--disable-blink-features=AutomationControlled")
+        opts.add_argument("--no-first-run")
+        opts.add_argument("--no-default-browser-check")
 
-        # Preferências de download (FORÇA baixar PDF)
+        # PERFIL (essencial para manter estado/certs)
+        if user_data_dir:
+            print(f"[DEBUG] user-data-dir: {user_data_dir}", flush=True)
+            opts.add_argument(f"--user-data-dir={user_data_dir}")
+
+        # Downloads
         Path(download_dir).mkdir(parents=True, exist_ok=True)
         prefs = {
             "download.default_directory": str(Path(download_dir).resolve()),
             "download.prompt_for_download": False,
             "download.directory_upgrade": True,
+            "plugins.always_open_pdf_externally": True,
             "safebrowsing.enabled": True,
-            "plugins.always_open_pdf_externally": True,  # baixa PDF em vez de abrir viewer
         }
         opts.add_experimental_option("prefs", prefs)
 
-        # Auto-seleção de certificado (opcional)
+        # Policy de auto-seleção de certificado para o domínio do ESAJ
         if cert_issuer_cn or cert_subject_cn:
             policy = {"pattern": "https://esaj.tjsp.jus.br", "filter": {}}
             if cert_issuer_cn:
                 policy["filter"].setdefault("ISSUER", {})["CN"] = cert_issuer_cn
             if cert_subject_cn:
                 policy["filter"].setdefault("SUBJECT", {})["CN"] = cert_subject_cn
-            opts.add_argument("--auto-select-certificate-for-urls=" + json.dumps([policy]))
+            pj = json.dumps([policy], ensure_ascii=False)
+            print(f"[DEBUG] auto-select-certificate-for-urls: {pj}", flush=True)
+            opts.add_argument(f"--auto-select-certificate-for-urls={pj}")
 
         return opts
 
-    opts = make_options()
-    
-    # NOVO: Usa Remote WebDriver se SELENIUM_REMOTE_URL estiver definido
+    # ---- 1) Selenium Grid (somente se explicitamente configurado) ----
     if selenium_remote_url:
-        print(f"[INFO] Conectando ao Selenium Grid: {selenium_remote_url}")
         try:
+            print(f"[INFO] Conectando ao Selenium Grid: {selenium_remote_url}", flush=True)
             from selenium.webdriver import Remote
-            driver = Remote(
-                command_executor=selenium_remote_url,
-                options=opts
-            )
+            opts = make_options()
+            driver = Remote(command_executor=selenium_remote_url, options=opts)
             driver.set_page_load_timeout(60)
-            print("[INFO] ✅ Conectado ao Selenium Grid com sucesso!")
+            print("[INFO] ✅ Conectado ao Selenium Grid.", flush=True)
             return driver
         except Exception as e:
-            print(f"[ERROR] ❌ Falha ao conectar no Selenium Grid: {e}")
-            print("[INFO] Tentando Chrome local como fallback...")
-    
-    # NOVO: ChromeDriver local com Xvfb (para Web Signer)
-    # Se não tiver SELENIUM_REMOTE_URL, tenta conectar ao ChromeDriver local
-    if use_local_chromedriver:
-        chromedriver_url = "http://localhost:4444"
-        print(f"[INFO] Conectando ao ChromeDriver local (Xvfb): {chromedriver_url}")
-        try:
-            from selenium.webdriver import Remote
-            driver = Remote(
-                command_executor=chromedriver_url,
-                options=opts
-            )
-            driver.set_page_load_timeout(60)
-            print("[INFO] ✅ Conectado ao ChromeDriver local com sucesso!")
-            print("[INFO] Chrome rodando no Xvfb com Web Signer habilitado")
-            return driver
-        except Exception as e:
-            print(f"[ERROR] ❌ Falha ao conectar no ChromeDriver local: {e}")
-            print("[INFO] Tentando Chrome local direto como fallback...")
-    
-    # Fallback: Chrome local (para desenvolvimento)
-    # Tenta anexar via debuggerAddress primeiro
+            print(f"[ERROR] ❌ Falha ao conectar no Grid: {e}", flush=True)
+            print("[INFO] Usando Chrome local como fallback…", flush=True)
+
+    # ---- 2) Anexar a um Chrome já aberto via debuggerAddress (opcional) ----
     if not debugger_address:
         debugger_address = _os.environ.get("DEBUGGER_ADDRESS")
-    
     if debugger_address:
         try:
-            opts_debug = make_options()
-            opts_debug.add_experimental_option("debuggerAddress", debugger_address)
-            print(f"[INFO] Tentando anexar ao Chrome em {debugger_address}...")
-            d = webdriver.Chrome(options=opts_debug)
+            print(f"[INFO] Tentando anexar ao Chrome em {debugger_address}…", flush=True)
+            opts_dbg = make_options()
+            opts_dbg.add_experimental_option("debuggerAddress", debugger_address)
+            d = webdriver.Chrome(options=opts_dbg)
             d.set_page_load_timeout(60)
-            print("[INFO] ✅ Anexado ao Chrome existente!")
+            print("[INFO] ✅ Anexado ao Chrome existente.", flush=True)
             return d
         except WebDriverException as e:
-            print(f"[WARN] Falha ao anexar em {debugger_address}: {e}")
-            print("[INFO] Abrindo Chrome novo...")
-    
-    # Chrome local novo
-    print("[INFO] Usando Chrome local")
+            print(f"[WARN] Falha ao anexar em {debugger_address}: {e}", flush=True)
+            print("[INFO] Abrindo Chrome novo…", flush=True)
+
+    # ---- 3) Chrome local "novo" ----
+    print("[INFO] Usando Chrome local", flush=True)
+    opts = make_options()
     if attach:
+        # algumas builds exigem isso para permitir conexões do devtools
         opts.add_argument("--remote-allow-origins=*")
     d = webdriver.Chrome(options=opts)
     d.set_page_load_timeout(60)
@@ -277,53 +261,153 @@ def _cas_login_with_password(wait, driver, usuario, senha):
         return False
 
 def _maybe_cas_login(wait, driver, cert_subject_cn, user=None, pwd=None, payload=None):
-    if "sajcas/login" not in (driver.current_url or ""):
+    import time
+    cur_url = (driver.current_url or "")
+    if "sajcas/login" not in cur_url.lower():
         debug(payload, "CAS: não precisou logar (já dentro).")
         return
-    
-    # PRIORIDADE 1: Tenta certificado digital (Web Signer instalado e funcionando)
+
+    debug(payload, "CAS: certificado – ativando aba, aguardando select e enviando…")
+
+    # 1) garantir a aba "Certificado digital" ativa (por id OU por texto)
     try:
-        debug(payload, "CAS: tentando aba CERTIFICADO…")
-        _switch_to_tab(wait, (By.ID, "linkAbaCertificado"))
-        wait.until(EC.presence_of_element_located((By.ID, "certificados")))
-        def options_ready(drv):
+        try:
+            _switch_to_tab(wait, (By.ID, "linkAbaCertificado"))
+        except Exception:
+            el = driver.find_element(
+                By.XPATH,
+                "//a[contains(translate(.,'CERTIFICADO DIGITAL','certificado digital'),'certificado digital')]"
+            )
+            driver.execute_script("arguments[0].scrollIntoView({block:'center'});", el)
+            try: el.click()
+            except Exception: driver.execute_script("arguments[0].click();", el)
+    except Exception:
+        pass  # se já está na aba, segue
+
+    # 2) esperar o SELECT ficar realmente pronto (sem 'Carregando', não desabilitado)
+    def _wait_cert_select_ready():
+        sel = wait.until(EC.presence_of_element_located((
+            By.XPATH, "//form[@id='formCertificado']//select | //select[@id='certificados' or contains(@id,'cert') or contains(@name,'cert')]"
+        )))
+        deadline = time.time() + 25
+        while time.time() < deadline:
             try:
-                els = drv.find_elements(By.CSS_SELECTOR, "#certificados option")
-                if not els: return False
-                first = (els[0].text or "").strip().lower()
-                return not (len(els) == 1 and "carregando" in first)
-            except: return False
-        wait.until(options_ready)
-        subj_hint = cert_subject_cn.split(":")[0].strip() if cert_subject_cn else None
-        def pick():
-            els = driver.find_elements(By.CSS_SELECTOR, "#certificados option"); ch = None
-            if subj_hint:
-                for o in els:
-                    if subj_hint.lower() in ((o.text or "").lower()): ch = o; break
-            if not ch:
-                for o in els:
-                    if (o.get_attribute("value") or '').strip(): ch = o; break
-            return ch
-        ch = pick()
-        if not ch: raise RuntimeError("CAS: nenhum certificado disponível.")
-        driver.execute_script("""
-            const opt=arguments[0], sel=document.querySelector('#certificados');
-            sel.value=opt.value; sel.dispatchEvent(new Event('change',{bubbles:true}));
-        """, ch)
-        debug(payload, f"CAS: certificado = {(ch.text or '').strip()}")
-        clicked = False
-        for by, sel in [(By.ID, "submitCertificado"),
-                        (By.CSS_SELECTOR, "#submitCertificado,button#submitCertificado")]:
-            els = driver.find_elements(by, sel)
-            if els:
-                try: els[0].click()
-                except: driver.execute_script("arguments[0].click();", els[0])
-                clicked = True; break
-        if not clicked: raise RuntimeError("CAS: botão 'Entrar' (certificado) não encontrado.")
-        wait.until(EC.url_contains("/cpopg/"))
-        debug(payload, "CAS: certificado OK."); return
-    except Exception as e:
-        debug(payload, f"CAS: falha no certificado - {str(e)}")
+                disabled = bool(sel.get_property("disabled")) or (sel.get_attribute("disabled") in ("true", "disabled"))
+            except Exception:
+                disabled = False
+            options = [ (o.text or "").strip() for o in sel.find_elements(By.TAG_NAME, "option") ]
+            carregando = any("carregando" in op.lower() for op in options) and len(options) <= 1
+            if not disabled and len(options) > 0 and not carregando:
+                return sel, options
+            time.sleep(0.4)
+
+        # tentar 'atualizar' os certificados (botão com ícone refresh ao lado)
+        try:
+            refresh = driver.find_element(
+                By.XPATH,
+                "//button[.//span[contains(@class,'ui-icon-refresh')]] | "
+                "//a[.//span[contains(@class,'ui-icon-refresh')]] | "
+                "//button[contains(@onclick,'carregarCertificados') or contains(.,'Atualizar')] | "
+                "//a[contains(@onclick,'carregarCertificados')]"
+            )
+            try: refresh.click()
+            except Exception: driver.execute_script("arguments[0].click();", refresh)
+            time.sleep(1.5)
+        except Exception:
+            pass
+        return sel, [ (o.text or "").strip() for o in sel.find_elements(By.TAG_NAME, "option") ]
+
+    try:
+        sel, options = _wait_cert_select_ready()
+    except TimeoutException:
+        raise RuntimeError("CAS: select de certificados não apareceu.")
+
+    # 3) escolher a opção alvo e disparar 'change'
+    try:
+        hint = (cert_subject_cn or "").split(":")[0].strip().lower()
+        idx = None
+        for i, label in enumerate(options):
+            if hint and hint in label.lower():
+                idx = i
+                break
+        if idx is None:
+            idx = 0  # primeira válida
+        driver.execute_script(
+            "arguments[0].selectedIndex = arguments[1];"
+            "arguments[0].dispatchEvent(new Event('change', {bubbles:true}));",
+            sel, idx
+        )
+        time.sleep(0.3)
+    except Exception:
+        pass
+
+    # 4) clicar no ENTRAR (id, name, texto…) e garantir que não está desabilitado
+    clicked = False
+    btn = None
+    for xp in (
+        "//*[@id='submitCertificado']",
+        "//input[@name='pbEntrar' and @type='button']",
+        "//button[normalize-space()='Entrar']",
+        "//input[@type='submit' and translate(@value,'ENTRAR','entrar')='entrar']",
+    ):
+        els = driver.find_elements(By.XPATH, xp)
+        if els:
+            btn = els[0]
+            break
+
+    if not btn:
+        raise RuntimeError("CAS: botão 'Entrar' (certificado) não encontrado.")
+
+    # habilitar o botão, se a página deixou desabilitado
+    try:
+        driver.execute_script(
+            "arguments[0].disabled=false;"
+            "arguments[0].removeAttribute('disabled');"
+            "if(arguments[0].classList) arguments[0].classList.remove('spwBotaoDefault-desabilitado');",
+            btn
+        )
+    except Exception:
+        pass
+
+    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", btn)
+    try:
+        btn.click()
+    except Exception:
+        driver.execute_script("arguments[0].click();", btn)
+    # alguns handlers dependem de um MouseEvent real
+    try:
+        driver.execute_script("arguments[0].dispatchEvent(new MouseEvent('click', {bubbles:true}));", btn)
+    except Exception:
+        pass
+
+    # 5) esperar sair do CAS… ou detectar 2FA
+    try:
+        wait.until(lambda d: "sajcas/login" not in (d.current_url or "").lower())
+        debug(payload, "CAS: certificado OK (saiu do login).")
+        return
+    except TimeoutException:
+        # checar se abriu o fluxo de 2FA
+        try:
+            twofa = driver.find_elements(
+                By.XPATH,
+                "//*[contains(.,'Validação de identificação') or contains(.,'código de validação')]"
+            )
+            if twofa:
+                raise RuntimeError("CAS: foi exigido código de validação (2FA). Sem o token, o fluxo não prossegue.")
+        except Exception:
+            pass
+        debug(payload, "CAS: ainda na tela de login após enviar (cert).")
+
+    # 6) fallback CPF/senha se disponível
+    if user and pwd:
+        debug(payload, "CAS: tentando login com CPF/CNPJ (fallback)…")
+        if _cas_login_with_password(wait, driver, user, pwd):
+            debug(payload, "CAS: login CPF/CNPJ OK.")
+            return
+        debug(payload, "CAS: falha no login CPF/CNPJ.")
+
+    raise RuntimeError("CAS: autenticação necessária e não realizada.")
+
     
     # FALLBACK: Tenta CPF/senha (caso certificado falhe)
     if user and pwd:
@@ -469,7 +553,7 @@ def _submit_consulta(wait, driver, payload=None):
         pass
 
     # 2) submit no form
-    js = """
+    js = r"""
       const f = document.getElementById('formConsulta') ||
                 document.querySelector("form[name='consultarProcessoForm']") ||
                 document.querySelector("form[action*='/cpopg/search.do']");
@@ -1301,6 +1385,47 @@ def go_and_extract(doc_number=None, attach=False, user_data_dir=None,
         debug(payload, "Abrindo tela de consulta…")
         driver.get(BASE_URL); wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
         _maybe_cas_login(wait, driver, cert_subject_cn, user=cas_usuario, pwd=cas_senha, payload=payload)
+              
+                # === GARANTIR QUE ESTAMOS NA TELA DE REQUISITÓRIOS ===
+        def _is_requisitorios_url(u: str) -> bool:
+            u = (u or "").lower()
+            return ("/cpopg/" in u) or ("abrirconsultaderequisitorios" in u)
+
+        try:
+            cur = (driver.current_url or "")
+        except Exception:
+            cur = ""
+
+        if not _is_requisitorios_url(cur):
+            # 1) Tentar clicar no menu "Requisitórios" da home do e-SAJ
+            try:
+                # tenta por texto normalizado
+                menu_xpath = (
+                    "//a[normalize-space()='Requisitórios' or contains(translate(.,"
+                    "'REQUISITORIOS','requisitorios'),'requisitorios')]"
+                )
+                el = WebDriverWait(driver, 5).until(
+                    EC.element_to_be_clickable((By.XPATH, menu_xpath))
+                )
+                driver.execute_script("arguments[0].scrollIntoView({block:'center'});", el)
+                try: el.click()
+                except Exception: driver.execute_script("arguments[0].click();", el)
+
+                WebDriverWait(driver, 10).until(lambda d: _is_requisitorios_url(d.current_url))
+            except Exception:
+                # 2) Se não houver menu ou falhou, ir direto para a BASE_URL
+                try:
+                    driver.get(BASE_URL)  # ex.: .../cpopg/abrirConsultaDeRequisitorios.do?gateway=true
+                except Exception:
+                    pass
+
+        # 3) Esperar que a página de consulta esteja carregada
+        try:
+            wait.until(EC.presence_of_element_located((By.ID, "cbPesquisa")))
+        except Exception:
+            # último recurso: abrir de novo a BASE_URL e esperar o seletor
+            driver.get(BASE_URL)
+            wait.until(EC.presence_of_element_located((By.ID, "cbPesquisa")))
 
         if process_number:
             _select_criterio_processo(wait, driver, process_number)
