@@ -145,8 +145,8 @@ def main():
             print(f"Processando item {i+1}/{total} do Job ID={job_id}: Processo {processo_cnj}")
             print("=" * 80)
 
-            caminho_download = os.path.abspath(f"C:/Users/Administrator/Documents/revisa/ocr-oficios-tjsp/Processos/{cpf_associado}")
-
+            #caminho_download = os.path.abspath(f"C:/Users/Administrator/Documents/revisa/ocr-oficios-tjsp/Processos/{cpf_associado}")
+            caminho_download = os.path.abspath(f"downloads/{cpf_associado}")
             # Fecha Chrome/ChromeDriver anteriores para liberar o perfil
             try:
                 if os.name == "nt":
