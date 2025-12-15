@@ -45,7 +45,8 @@ def fetch_precatorios_from_db():
         query = """
             SELECT id, cpf, processos 
             FROM consultas_esaj 
-            WHERE status = FALSE OR status IS NULL
+            WHERE status = false 
+            and current_state='PAYMENT_APPROVED'
             ORDER BY id 
             LIMIT 1;
         """
