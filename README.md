@@ -326,7 +326,7 @@ copy .env.example .env
 notepad .env
 
 # 5. Testar
-python crawler_full.py --doc "12345678900" --abrir-autos --baixar-pdf
+python crawler_full.py --doc "03730461893" --abrir-autos --baixar-pdf
 ```
 
 ---

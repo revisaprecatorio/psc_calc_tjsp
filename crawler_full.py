@@ -8,7 +8,7 @@ Crawler ESAJ TJSP - Consulta de Requisitórios
 - Trata alerta "Selecione pelo menos um item da árvore"
 - Métricas: started_at, finished_at, duration_seconds, duration_hms
 - Fecha abas criadas pelo crawler e encerra o Chrome ao final
-
+- Execucao direta python crawler_full.py --doc 03730461893 --attach --debugger-address "127.0.0.1:9222" --abrir-autos --baixar-pdf --download-dir "C:\Temp\RevisaDownloads"
 Requisitos:
   pip install selenium
   (opcional para fallback HTTP) pip install requests
@@ -33,7 +33,79 @@ from selenium.common.exceptions import TimeoutException, WebDriverException
 # ------------------------------------------------------------
 # Constantes / utilitários
 # ------------------------------------------------------------
-BASE_URL = "https://esaj.tjsp.jus.br/cpopg/abrirConsultaDeRequisitorios.do?gateway=true"
+#BASE_URL = "https://esaj.tjsp.jus.br/cpopg/abrirConsultaDeRequisitorios.do?gateway=true"
+BASE_URLS = [
+    "https://esaj.tjsp.jus.br/cpopg/abrirConsultaDeRequisitorios.do",
+    "https://esaj.tjsp.jus.br/cpopg/abrirConsultaDeRequisitorios.do?gateway=true",
+]
+
+BASE_URL = BASE_URLS[0]  # compatibilidade: código antigo pode usar BASE_URL
+
+
+# BASE_URL "sempre existe" (compatibilidade com trechos antigos)
+BASE_URL = next(
+    (u for u in (BASE_URLS or []) if isinstance(u, str) and u.strip()),
+    "https://esaj.tjsp.jus.br/cpopg/abrirConsultaDeRequisitorios.do"
+)
+
+def _ensure_cert_logged_in(wait, driver, payload, base_url="https://esaj.tjsp.jus.br/"):
+    """
+    Garante que a sessão esteja autenticada com certificado.
+    A policy do Chrome cuida da seleção do certificado; aqui só disparamos o fluxo do site.
+    """
+    driver.get(base_url)
+    time.sleep(0.5)
+
+    # Se existir botão/link Identificar-se, clica para disparar autenticação
+    ident = driver.find_elements(By.XPATH, "//a[contains(.,'Identificar-se') or contains(.,'Identificar')]")
+    if ident:
+        try:
+            driver.execute_script("arguments[0].scrollIntoView({block:'center'});", ident[0])
+            try:
+                ident[0].click()
+            except Exception:
+                driver.execute_script("arguments[0].click();", ident[0])
+
+            debug(payload, "Auth: clique em 'Identificar-se' disparado (certificado).")
+        except Exception as e:
+            payload.setdefault("auth_errors", []).append(str(e))
+            return False
+
+    # Espera algum indicativo de login concluído:
+    # 1) sumir "Identificar-se" OU 2) aparecer "Sair" OU 3) URL mudar para área autenticada
+    try:
+        wait.until(EC.any_of(
+            EC.presence_of_element_located((By.XPATH, "//*[contains(.,'Sair') or contains(.,'Logout')]")),
+            EC.invisibility_of_element_located((By.XPATH, "//a[contains(.,'Identificar-se') or contains(.,'Identificar')]")),
+        ))
+        debug(payload, "Auth: sessão parece autenticada.")
+        return True
+    except TimeoutException:
+        debug(payload, "Auth: não consegui confirmar login (site pode exigir interação/tempo).")
+        payload.setdefault("auth_required", True)
+        return False
+
+def _get_base_urls():
+    """Retorna URLs base válidas (strings) e sem duplicar."""
+    urls = []
+
+    u = globals().get("BASE_URL", None)
+    if isinstance(u, str) and u.strip():
+        urls.append(u.strip())
+
+    ul = globals().get("BASE_URLS", None)
+    if isinstance(ul, (list, tuple)):
+        urls.extend([x.strip() for x in ul if isinstance(x, str) and x.strip()])
+
+    # dedupe mantendo ordem
+    seen = set()
+    out = []
+    for x in urls:
+        if x not in seen:
+            seen.add(x)
+            out.append(x)
+    return out
+
 OUTPUT_DIR = Path("screenshots"); OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 PROCESSO_REGEX = re.compile(r"\b\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}\b")  # CNJ
 
@@ -54,9 +126,9 @@ def _safe_text(el):
 
 def debug(payload, msg):
     ts = datetime.now().strftime("%H:%M:%S.%f")[:-3]
-    #line = f"[{ts}] {msg}"
-    #print(line)
-    #payload.setdefault("debug_steps", []).append(line)
+    line = f"[{ts}] {msg}"
+    print(line, flush=True)  # O flush=True garante que apareça na hora no terminal
+    payload.setdefault("debug_steps", []).append(line)
 
 # ============================================================
 # Helpers para download de PDF (espera + fallback HTTP)
@@ -127,106 +199,101 @@ def _http_download_with_cookies(url, driver, outdir, filename=None, referer=None
 def _build_chrome(attach, user_data_dir, cert_issuer_cn, cert_subject_cn,
                   debugger_address=None, headless=False, download_dir="downloads"):
     """
-    Cria um Chrome WebDriver com:
-      - Perfil do usuário (user-data-dir), para reutilizar sessão/certificados
-      - Policy de auto-seleção de certificado do ESAJ
-      - Preferências de download
-    Usa Selenium Grid SOMENTE se a variável de ambiente SELENIUM_REMOTE_URL estiver definida.
-    Caso contrário, usa Chrome local. Tenta anexar a um Chrome já aberto se DEBUGGER_ADDRESS for informado.
+    - Se debugger_address for informado: anexa ao Chrome já aberto (remote debugging).
+      Se falhar, NÃO abre um Chrome novo (porque isso perde a sessão/certificado).
+    - Se NÃO houver debugger_address: abre Chrome novo (com user-data-dir, prefs, etc).
     """
-    import os as _os, json
-    from pathlib import Path
+    import os as _os
     from selenium import webdriver
     from selenium.webdriver.chrome.options import Options
+    from selenium.webdriver.chrome.service import Service
     from selenium.common.exceptions import WebDriverException
+    from pathlib import Path
+    import json
 
-    selenium_remote_url = _os.environ.get("SELENIUM_REMOTE_URL")
+    # ----------------------------
+    # 1) MODO ATTACH (Chrome já aberto)
+    # ----------------------------
+    if debugger_address:
+        opts_dbg = Options()
+        # Importantíssimo: não usar user-data-dir aqui
+        # (o Chrome já está rodando com o profile certo)
+        opts_dbg.add_experimental_option("debuggerAddress", debugger_address)
 
-    # ---- opções do Chrome (compartilhadas por todos os modos) ----
+        # Alguns ambientes precisam disso (não atrapalha o attach)
+        opts_dbg.add_argument("--remote-allow-origins=*")
+
+        print(f"[INFO] Tentando anexar ao Chrome existente em {debugger_address}...", flush=True)
+        import time
+        for i in range(3): # Tenta 3 vezes
+            try:
+                print(f"[INFO] Tentativa de conexão {i+1}/3 em {debugger_address}...", flush=True)
+                d = webdriver.Chrome(service=Service(), options=opts_dbg)
+                d.set_page_load_timeout(60)
+                return d
+            except WebDriverException:
+                time.sleep(2) # Espera 2s antes de tentar de novo
+        
+        # Se falhar nas 3, aí sim dá erro
+        raise RuntimeError(
+            "Falha ao conectar no Chrome (Porta 9222). "
+            "Verifique se o Chrome foi aberto com --remote-debugging-port=9222"
+        )
+        
+
+    # ----------------------------
+    # 2) MODO NORMAL (abrir Chrome novo)
+    # ----------------------------
     def make_options():
         opts = Options()
 
-        # Atenção: client-cert NÃO funciona em headless; se alguém ativar, avisamos e ignoramos.
         if headless:
-            print("[WARN] Headless solicitado, mas login por certificado não funciona em headless. Ignorando.", flush=True)
+            try:
+                opts.add_argument("--headless=new")
+            except Exception:
+                opts.add_argument("--headless")
 
-        # Estabilidade
+        # Flags padrão
         opts.add_argument("--disable-gpu")
         opts.add_argument("--disable-dev-shm-usage")
         opts.add_argument("--no-sandbox")
         opts.add_argument("--window-size=1920,1080")
         opts.add_argument("--disable-blink-features=AutomationControlled")
-        opts.add_argument("--no-first-run")
-        opts.add_argument("--no-default-browser-check")
+        opts.add_argument("--remote-allow-origins=*")
 
-        # PERFIL (essencial para manter estado/certs)
         if user_data_dir:
             print(f"[DEBUG] user-data-dir: {user_data_dir}", flush=True)
             opts.add_argument(f"--user-data-dir={user_data_dir}")
 
-        # Downloads
+        # Preferências de download
         Path(download_dir).mkdir(parents=True, exist_ok=True)
         prefs = {
             "download.default_directory": str(Path(download_dir).resolve()),
             "download.prompt_for_download": False,
             "download.directory_upgrade": True,
-            "plugins.always_open_pdf_externally": True,
             "safebrowsing.enabled": True,
+            "plugins.always_open_pdf_externally": True,
         }
         opts.add_experimental_option("prefs", prefs)
 
-        # Policy de auto-seleção de certificado para o domínio do ESAJ
+        # Auto-seleção de certificado via flag (opcional)
         if cert_issuer_cn or cert_subject_cn:
             policy = {"pattern": "https://esaj.tjsp.jus.br", "filter": {}}
             if cert_issuer_cn:
                 policy["filter"].setdefault("ISSUER", {})["CN"] = cert_issuer_cn
             if cert_subject_cn:
                 policy["filter"].setdefault("SUBJECT", {})["CN"] = cert_subject_cn
-            pj = json.dumps([policy], ensure_ascii=False)
-            print(f"[DEBUG] auto-select-certificate-for-urls: {pj}", flush=True)
-            opts.add_argument(f"--auto-select-certificate-for-urls={pj}")
+            opts.add_argument("--auto-select-certificate-for-urls=" + json.dumps([policy]))
 
         return opts
 
-    # ---- 1) Selenium Grid (somente se explicitamente configurado) ----
-    if selenium_remote_url:
-        try:
-            print(f"[INFO] Conectando ao Selenium Grid: {selenium_remote_url}", flush=True)
-            from selenium.webdriver import Remote
-            opts = make_options()
-            driver = Remote(command_executor=selenium_remote_url, options=opts)
-            driver.set_page_load_timeout(60)
-            print("[INFO] ✅ Conectado ao Selenium Grid.", flush=True)
-            return driver
-        except Exception as e:
-            print(f"[ERROR] ❌ Falha ao conectar no Grid: {e}", flush=True)
-            print("[INFO] Usando Chrome local como fallback…", flush=True)
-
-    # ---- 2) Anexar a um Chrome já aberto via debuggerAddress (opcional) ----
-    if not debugger_address:
-        debugger_address = _os.environ.get("DEBUGGER_ADDRESS")
-    if debugger_address:
-        try:
-            print(f"[INFO] Tentando anexar ao Chrome em {debugger_address}…", flush=True)
-            opts_dbg = make_options()
-            opts_dbg.add_experimental_option("debuggerAddress", debugger_address)
-            d = webdriver.Chrome(options=opts_dbg)
-            d.set_page_load_timeout(60)
-            print("[INFO] ✅ Anexado ao Chrome existente.", flush=True)
-            return d
-        except WebDriverException as e:
-            print(f"[WARN] Falha ao anexar em {debugger_address}: {e}", flush=True)
-            print("[INFO] Abrindo Chrome novo…", flush=True)
-
-    # ---- 3) Chrome local "novo" ----
-    print("[INFO] Usando Chrome local", flush=True)
+    print("[INFO] Usando Chrome novo (modo normal).", flush=True)
     opts = make_options()
-    if attach:
-        # algumas builds exigem isso para permitir conexões do devtools
-        opts.add_argument("--remote-allow-origins=*")
-    d = webdriver.Chrome(options=opts)
+    d = webdriver.Chrome(service=Service(), options=opts)
     d.set_page_load_timeout(60)
     return d
+
+
 
 # ------------------------------------------------------------
 # CAS / Login
@@ -261,146 +328,137 @@ def _cas_login_with_password(wait, driver, usuario, senha):
         return False
 
 def _maybe_cas_login(wait, driver, cert_subject_cn, user=None, pwd=None, payload=None):
+    """
+    Autentica quando necessário.
+    Versão Otimizada:
+    - Detecta "Identifique-se" e clica se necessário.
+    - Força seleção do certificado (índice 1) via JavaScript para evitar erros de UI.
+    """
     import time
-    cur_url = (driver.current_url or "")
-    if "sajcas/login" not in cur_url.lower():
-        debug(payload, "CAS: não precisou logar (já dentro).")
-        return
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support import expected_conditions as EC
+    from selenium.common.exceptions import TimeoutException
 
-    debug(payload, "CAS: certificado – ativando aba, aguardando select e enviando…")
+    # --- Funções auxiliares internas ---
+    def _norm(s: str) -> str:
+        import unicodedata
+        s = (s or "").replace("\xa0", " ")
+        s = unicodedata.normalize("NFKD", s)
+        s = "".join(ch for ch in s if not unicodedata.combining(ch))
+        return " ".join(s.lower().split())
 
-    # 1) garantir a aba "Certificado digital" ativa (por id OU por texto)
-    try:
+    def _is_cas_login_url() -> bool:
         try:
-            _switch_to_tab(wait, (By.ID, "linkAbaCertificado"))
+            return "sajcas/login" in (driver.current_url or "").lower()
         except Exception:
-            el = driver.find_element(
-                By.XPATH,
-                "//a[contains(translate(.,'CERTIFICADO DIGITAL','certificado digital'),'certificado digital')]"
-            )
-            driver.execute_script("arguments[0].scrollIntoView({block:'center'});", el)
-            try: el.click()
-            except Exception: driver.execute_script("arguments[0].click();", el)
-    except Exception:
-        pass  # se já está na aba, segue
+            return False
 
-    # 2) esperar o SELECT ficar realmente pronto (sem 'Carregando', não desabilitado)
-    def _wait_cert_select_ready():
-        sel = wait.until(EC.presence_of_element_located((
-            By.XPATH, "//form[@id='formCertificado']//select | //select[@id='certificados' or contains(@id,'cert') or contains(@name,'cert')]"
-        )))
-        deadline = time.time() + 25
-        while time.time() < deadline:
-            try:
-                disabled = bool(sel.get_property("disabled")) or (sel.get_attribute("disabled") in ("true", "disabled"))
-            except Exception:
-                disabled = False
-            options = [ (o.text or "").strip() for o in sel.find_elements(By.TAG_NAME, "option") ]
-            carregando = any("carregando" in op.lower() for op in options) and len(options) <= 1
-            if not disabled and len(options) > 0 and not carregando:
-                return sel, options
-            time.sleep(0.4)
-
-        # tentar 'atualizar' os certificados (botão com ícone refresh ao lado)
+    def _page_has_identifique_se() -> bool:
         try:
-            refresh = driver.find_element(
-                By.XPATH,
-                "//button[.//span[contains(@class,'ui-icon-refresh')]] | "
-                "//a[.//span[contains(@class,'ui-icon-refresh')]] | "
-                "//button[contains(@onclick,'carregarCertificados') or contains(.,'Atualizar')] | "
-                "//a[contains(@onclick,'carregarCertificados')]"
-            )
-            try: refresh.click()
-            except Exception: driver.execute_script("arguments[0].click();", refresh)
-            time.sleep(1.5)
+            elems = driver.find_elements(By.XPATH, "//*[self::a or self::button or @role='button']")
+            for el in elems:
+                try:
+                    t = _norm(el.text or el.get_attribute("textContent") or "")
+                    if "identifique" in t:
+                        return True
+                except Exception:
+                    continue
         except Exception:
             pass
-        return sel, [ (o.text or "").strip() for o in sel.find_elements(By.TAG_NAME, "option") ]
+        return False
 
-    try:
-        sel, options = _wait_cert_select_ready()
-    except TimeoutException:
-        raise RuntimeError("CAS: select de certificados não apareceu.")
-
-    # 3) escolher a opção alvo e disparar 'change'
-    try:
-        hint = (cert_subject_cn or "").split(":")[0].strip().lower()
-        idx = None
-        for i, label in enumerate(options):
-            if hint and hint in label.lower():
-                idx = i
-                break
-        if idx is None:
-            idx = 0  # primeira válida
-        driver.execute_script(
-            "arguments[0].selectedIndex = arguments[1];"
-            "arguments[0].dispatchEvent(new Event('change', {bubbles:true}));",
-            sel, idx
-        )
-        time.sleep(0.3)
-    except Exception:
-        pass
-
-    # 4) clicar no ENTRAR (id, name, texto…) e garantir que não está desabilitado
-    clicked = False
-    btn = None
-    for xp in (
-        "//*[@id='submitCertificado']",
-        "//input[@name='pbEntrar' and @type='button']",
-        "//button[normalize-space()='Entrar']",
-        "//input[@type='submit' and translate(@value,'ENTRAR','entrar')='entrar']",
-    ):
-        els = driver.find_elements(By.XPATH, xp)
-        if els:
-            btn = els[0]
-            break
-
-    if not btn:
-        raise RuntimeError("CAS: botão 'Entrar' (certificado) não encontrado.")
-
-    # habilitar o botão, se a página deixou desabilitado
-    try:
-        driver.execute_script(
-            "arguments[0].disabled=false;"
-            "arguments[0].removeAttribute('disabled');"
-            "if(arguments[0].classList) arguments[0].classList.remove('spwBotaoDefault-desabilitado');",
-            btn
-        )
-    except Exception:
-        pass
-
-    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", btn)
-    try:
-        btn.click()
-    except Exception:
-        driver.execute_script("arguments[0].click();", btn)
-    # alguns handlers dependem de um MouseEvent real
-    try:
-        driver.execute_script("arguments[0].dispatchEvent(new MouseEvent('click', {bubbles:true}));", btn)
-    except Exception:
-        pass
-
-    # 5) esperar sair do CAS… ou detectar 2FA
-    try:
-        wait.until(lambda d: "sajcas/login" not in (d.current_url or "").lower())
-        debug(payload, "CAS: certificado OK (saiu do login).")
-        return
-    except TimeoutException:
-        # checar se abriu o fluxo de 2FA
+    def _click_identifique_se() -> bool:
         try:
-            twofa = driver.find_elements(
-                By.XPATH,
-                "//*[contains(.,'Validação de identificação') or contains(.,'código de validação')]"
-            )
-            if twofa:
-                raise RuntimeError("CAS: foi exigido código de validação (2FA). Sem o token, o fluxo não prossegue.")
+            elems = driver.find_elements(By.XPATH, "//*[self::a or self::button or @role='button']")
+            for el in elems:
+                try:
+                    t = _norm(el.text or el.get_attribute("textContent") or "")
+                    if "identifique" in t:
+                        driver.execute_script("arguments[0].scrollIntoView({block:'center'});", el)
+                        try:
+                            el.click()
+                        except Exception:
+                            driver.execute_script("arguments[0].click();", el)
+                        return True
+                except Exception:
+                    continue
         except Exception:
             pass
-        debug(payload, "CAS: ainda na tela de login após enviar (cert).")
+        return False
 
-    # 6) fallback CPF/senha se disponível
+    def _already_inside_app() -> bool:
+        try:
+            if driver.find_elements(By.ID, "cbPesquisa"): return True
+            if driver.find_elements(By.ID, "campo_DOCPARTE") or driver.find_elements(By.ID, "NUMPROC"): return True
+            if driver.find_elements(By.ID, "numeroProcesso"): return True
+        except Exception:
+            pass
+        return False
+
+    # --- Lógica de Fluxo ---
+
+    # 1. Se não está em URL de login, mas tem "Identifique-se", clica.
+    if (not _is_cas_login_url()) and _page_has_identifique_se() and (not _already_inside_app()):
+        debug(payload, "CAS: achei 'Identifique-se' na página; clicando...")
+        _click_identifique_se()
+        try:
+            WebDriverWait(driver, 10).until(lambda d: _is_cas_login_url() or _already_inside_app())
+        except TimeoutException:
+            pass
+
+    # 2. Se depois disso não está em login e já parece dentro, retorna
+    if not _is_cas_login_url():
+        debug(payload, "CAS: não precisou logar (já dentro/url diferente).")
+        return
+
+    # =========================
+    # PRIORIDADE 1: Certificado (Versão Otimizada / Agressiva)
+    # =========================
+    try:
+        debug(payload, "CAS: Tentando login via Certificado...")
+
+        # A. Clica na aba certificado (garantia)
+        try:
+            tab = driver.find_element(By.ID, "linkAbaCertificado")
+            driver.execute_script("arguments[0].click();", tab)
+            time.sleep(1)
+        except Exception:
+            pass 
+
+        # B. Seleciona o certificado via JS (Pega o índice 1, ignorando placeholder)
+        # Isso resolve problemas onde o Selenium não consegue interagir com o <select>
+        driver.execute_script("""
+            var sel = document.getElementById('certificados');
+            if (sel && sel.options.length > 1) {
+                sel.selectedIndex = 1; 
+                sel.dispatchEvent(new Event('change'));
+                sel.dispatchEvent(new Event('input'));
+            }
+        """)
+        time.sleep(0.5)
+
+        # C. Clica no botão Entrar
+        try:
+            btn_entrar = driver.find_element(By.ID, "submitCertificado")
+            driver.execute_script("arguments[0].click();", btn_entrar)
+        except Exception:
+            # Fallback se o ID mudar
+            driver.execute_script("document.querySelector('#submitCertificado, button[type=submit]').click();")
+        
+        # D. Espera sair da URL de login
+        WebDriverWait(driver, 30).until(lambda d: "sajcas" not in (d.current_url or ""))
+        debug(payload, "CAS: Login via certificado enviado (sucesso).")
+        return
+
+    except Exception as e:
+        debug(payload, f"CAS: Tentativa de certificado falhou: {e}")
+
+    # =========================
+    # FALLBACK: CPF/Senha
+    # =========================
     if user and pwd:
         debug(payload, "CAS: tentando login com CPF/CNPJ (fallback)…")
+        # _cas_login_with_password deve estar definida no escopo global do arquivo
         if _cas_login_with_password(wait, driver, user, pwd):
             debug(payload, "CAS: login CPF/CNPJ OK.")
             return
@@ -408,15 +466,38 @@ def _maybe_cas_login(wait, driver, cert_subject_cn, user=None, pwd=None, payload
 
     raise RuntimeError("CAS: autenticação necessária e não realizada.")
 
+def _ensure_esaj_authenticated(wait, driver, payload=None,
+                               cert_subject_cn=None, cas_usuario=None, cas_senha=None,
+                               base_url=None, timeout=20): # Timeout reduzido para ser mais ágil
     
-    # FALLBACK: Tenta CPF/senha (caso certificado falhe)
-    if user and pwd:
-        debug(payload, "CAS: tentando login com CPF/CNPJ (fallback)…")
-        if _cas_login_with_password(wait, driver, user, pwd):
-            debug(payload, "CAS: login CPF/CNPJ OK."); return
-        debug(payload, "CAS: falha no login CPF/CNPJ.")
-    
-    raise RuntimeError("CAS: autenticação necessária e não realizada.")
+    # Verifica se já existe o botão de sair (Logado)
+    if driver.find_elements(By.XPATH, "//*[contains(text(), 'Sair') or contains(text(), 'Logoff')]"):
+        return True
+
+    # Verifica se existe o botão Identificar-se
+    try:
+        # Procura link que contenha "Identificar"
+        btns = driver.find_elements(By.XPATH, "//a[contains(.,'Identificar')]")
+        if btns:
+            ident_btn = btns[0]
+            if ident_btn.is_displayed():
+                debug(payload, "Login: Botão 'Identificar-se' encontrado. Clicando...")
+                driver.execute_script("arguments[0].click();", ident_btn)
+                time.sleep(2)
+                
+                # Agora deve estar na tela do CAS ou Popup. Chama a função de login.
+                _maybe_cas_login(wait, driver, cert_subject_cn, user=cas_usuario, pwd=cas_senha, payload=payload)
+                return True
+    except Exception as e:
+        debug(payload, f"Erro ao tentar clicar em Identificar-se: {e}")
+
+    # Se chegou aqui, ou já está logado ou falhou.
+    # Verifica URL do CAS
+    if "sajcas/login" in driver.current_url:
+         _maybe_cas_login(wait, driver, cert_subject_cn, user=cas_usuario, pwd=cas_senha, payload=payload)
+         return True
+
+    return True
 
 # ------------------------------------------------------------
 # Consulta: Documento da Parte
@@ -533,92 +614,91 @@ def _select_criterio_processo(wait, driver, cnj_texto: str):
 # Disparo da consulta e espera do resultado
 # ------------------------------------------------------------
 def _submit_consulta(wait, driver, payload=None):
-    # 1) botão
+    """
+    Versão Otimizada: Foca nos IDs confirmados pelo seu HTML.
+    """
+    import time
+    
+    # 1. Tenta o clique normal no botão identificado
     try:
         btn = driver.find_element(By.ID, "botaoConsultarProcessos")
-        try: driver.execute_script("arguments[0].scrollIntoView({block:'center'});", btn)
-        except Exception: pass
-        try:
-            btn.click()
-            if payload: debug(payload, "Consultar: clique direto no #botaoConsultarProcessos.")
+        if btn.is_displayed():
+            driver.execute_script("arguments[0].scrollIntoView({block:'center'});", btn)
+            time.sleep(0.5) # Dá um respiro pro site
+            driver.execute_script("arguments[0].click();", btn)
+            if payload: debug(payload, "Consultar: Clique JS no #botaoConsultarProcessos.")
             return True
-        except Exception:
-            try:
-                driver.execute_script("arguments[0].click();", btn)
-                if payload: debug(payload, "Consultar: clique via JS no #botaoConsultarProcessos.")
-                return True
-            except Exception:
-                pass
     except Exception:
         pass
 
-    # 2) submit no form
-    js = r"""
-      const f = document.getElementById('formConsulta') ||
-                document.querySelector("form[name='consultarProcessoForm']") ||
-                document.querySelector("form[action*='/cpopg/search.do']");
-      if (f) {
-        const btn = f.querySelector("button, input[type='submit']");
-        if (btn) btn.removeAttribute('disabled');
-        if (typeof f.requestSubmit === 'function') { f.requestSubmit(); return true; }
-        if (typeof f.submit === 'function') { f.submit(); return true; }
-      }
-      return false;
-    """
+    # 2. Se o botão falhar, dispara o formulário direto pelo ID confirmado
     try:
-        if driver.execute_script(js):
-            if payload: debug(payload, "Consultar: form.requestSubmit()/submit().")
-            return True
+        # Seu HTML confirmou que o id é 'formConsulta'
+        driver.execute_script("document.getElementById('formConsulta').submit();")
+        if payload: debug(payload, "Consultar: Forcei envio via formConsulta.submit().")
+        return True
     except Exception:
         pass
 
-    # 3) ENTER no foro
-    try:
-        foro = None
-        for sel in [(By.ID, "foroNumeroUnificado"), (By.NAME, "foroNumeroUnificado")]:
-            els = driver.find_elements(*sel)
-            if els and els[0].is_displayed() and els[0].is_enabled():
-                foro = els[0]; break
-        if foro:
-            foro.send_keys(Keys.ENTER)
-            if payload: debug(payload, "Consultar: ENTER no campo do foro.")
-            return True
-    except Exception:
-        pass
-
-    if payload: debug(payload, "Consultar: não consegui acionar.")
+    if payload: debug(payload, "Consultar: Falha crítica (botão e form falharam).")
     return False
 
-def _wait_result_page(driver, timeout=45, payload=None):
+
+def _wait_result_page(driver, timeout=90, payload=None):
+    """
+    Versão ajustada para detectar 'listagemDeProcessos' (ID confirmado no HTML).
+    """
+    import time
+    from selenium.webdriver.common.by import By
+
+    def _body_text_lower():
+        try: return (driver.find_element(By.TAG_NAME, "body").text or "").strip().lower()
+        except: return ""
+
     end = time.time() + timeout
     last_url = None
-    while time.time() < end:
-        try:
-            url = driver.current_url
-            if url != last_url:
-                last_url = url
-                if payload: debug(payload, f"Após submit: URL -> {url}")
-        except Exception:
-            pass
 
+    while time.time() < end:
+        try: url = driver.current_url or ""
+        except: url = ""
+
+        if url != last_url:
+            last_url = url
+            if payload: debug(payload, f"Pós-submit: URL -> {url}")
+
+        # 1) DETECTA CAS / LOGIN / IDENTIFIQUE-SE
+        body_l = _body_text_lower()
+        if ("sajcas/login" in url.lower()) or ("identifique-se" in body_l) or ("certificado digital" in body_l):
+            if payload: debug(payload, "Pós-submit: Login detectado. Tentando contornar...")
+            # (Aqui você pode manter sua lógica de login automático se tiver)
+            time.sleep(1)
+            continue
+
+        # 2) DETALHE (Se cair direto no processo)
         try:
             if driver.find_elements(By.ID, "numeroProcesso"):
-                if payload: debug(payload, "Pós-submit: DETALHE.")
+                if payload: debug(payload, "Pós-submit: DETALHE encontrado.")
                 return "detalhe"
-        except Exception:
-            pass
+        except: pass
 
+        # 3) LISTA (AQUI ESTÁ A CORREÇÃO CRUCIAL)
         try:
-            if (driver.find_elements(By.CSS_SELECTOR, "a.linkProcesso, a[class*='numeroProcesso']") or
-                driver.find_elements(By.CSS_SELECTOR, "div.classeProcesso")):
-                if payload: debug(payload, "Pós-submit: LISTA.")
+            # Verifica o container principal da lista OU links de processo
+            if (driver.find_elements(By.ID, "listagemDeProcessos") or 
+                driver.find_elements(By.CSS_SELECTOR, "a.linkProcesso")):
+                if payload: debug(payload, "Pós-submit: LISTA encontrada.")
                 return "lista"
-        except Exception:
-            pass
+        except: pass
+
+        # 4) Verificação de 'Não Encontrado' para abortar rápido
+        if "não existem dados" in body_l or "nenhum registro encontrado" in body_l:
+             # Opcional: retornar um status específico ou deixar dar timeout se preferir
+             pass
+
         time.sleep(0.5)
+
     if payload: debug(payload, "Pós-submit: timeout aguardando resultado.")
     return None
-
 # ------------------------------------------------------------
 # Detalhe
 # ------------------------------------------------------------
@@ -636,6 +716,7 @@ def _extract_details_from_detail_page(driver):
     def T(i):
         try: return driver.find_element(By.ID, i).text.strip()
         except: return None
+
     data["numero_processo"] = T("numeroProcesso")
     data["classe_processo"] = T("classeProcesso")
     data["assunto_processo"] = T("assuntoProcesso")
@@ -643,35 +724,162 @@ def _extract_details_from_detail_page(driver):
     data["vara_processo"] = T("varaProcesso")
     data["juiz_processo"] = T("juizProcesso")
     data["is_precatorio"] = (data.get("classe_processo") or "").lower().find("precat") != -1
+
     try:
-        data["link_pasta_digital"] = driver.find_element(By.ID, "linkPasta").get_attribute("href")
-    except: data["link_pasta_digital"] = None
+        a = driver.find_element(By.ID, "linkPasta")
+        href = (a.get_attribute("href") or "").strip()
+        # se for hash (#liberarAutoPorSenha), mantém mesmo assim (open_pasta_digital agora sabe tratar)
+        data["link_pasta_digital"] = href if href else None
+    except:
+        data["link_pasta_digital"] = None
+
     return data["numero_processo"], data
+
 
 # ------------------------------------------------------------
 # Pasta Digital - helpers seleção/iframe/alerta
 # ------------------------------------------------------------
-def _open_pasta_digital(wait, driver, href, payload, timeout=20):
-    old = driver.window_handles[:]
-    debug(payload, f"PastaDigital: abrindo {href}")
-    driver.get(href)
-    def arrived(_):
-        new = driver.window_handles
-        if len(new) > len(old): driver.switch_to.window(new[-1])
-        if "pastadigital" in (driver.current_url or ""): return True
-        try: body = driver.find_element(By.TAG_NAME, "body").text.strip()
-        except Exception: body = ""
-        if body.startswith("http"): driver.get(body); return True
-        return False
+def _open_pasta_digital(wait, driver, href, payload, timeout=30):
+    """
+    Abre a Pasta Digital do ESAJ priorizando o clique em "Visualizar autos"
+    (que costuma carregar sessão/token corretamente). Usa href apenas como fallback.
+    """
+    import time
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support import expected_conditions as EC
+    from selenium.common.exceptions import TimeoutException
+
+    old_handles = list(driver.window_handles)
+
+    debug(payload, "PastaDigital: tentando clicar em 'Visualizar autos'…")
+
+    js_click_visualizar = r"""
+      const norm = s => (s||'')
+        .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+        .replace(/\s+/g,' ').trim().toLowerCase();
+
+      function isVisible(el){
+        if(!el) return false;
+        const st = window.getComputedStyle(el);
+        if(st && (st.visibility==='hidden' || st.display==='none')) return false;
+        const r = el.getBoundingClientRect();
+        return (r.width > 2 && r.height > 2);
+      }
+
+      // candidatos comuns
+      const candidates = [];
+
+      // id clássico do link da pasta
+      const byId = document.getElementById('linkPasta');
+      if (byId) candidates.push(byId);
+
+      // tudo que pode ser "botão"
+      candidates.push(...Array.from(document.querySelectorAll(
+        "a,button,input[type='button'],input[type='submit'],[role='button']"
+      )));
+
+      const wantedA = norm('visualizar autos');
+      const wantedB = norm('pasta digital');
+
+      function score(el){
+        const t = norm(el.innerText || el.textContent || '');
+        const v = norm(el.value || '');
+        const a = norm(el.getAttribute('aria-label') || '');
+        const ttl = norm(el.title || '');
+        const h = norm(el.getAttribute('href') || '');
+
+        let s = 0;
+        if (t.includes(wantedA) || v.includes(wantedA) || a.includes(wantedA) || ttl.includes(wantedA)) s += 10;
+        if (t.includes(wantedB) || v.includes(wantedB) || a.includes(wantedB) || ttl.includes(wantedB)) s += 6;
+        if (h.includes('pastadigital')) s += 5;
+        if ((el.id||'') === 'linkPasta') s += 8;
+        return s;
+      }
+
+      let best = null, bestScore = 0;
+      for(const el of candidates){
+        if(!isVisible(el)) continue;
+        const s = score(el);
+        if(s > bestScore){
+          bestScore = s;
+          best = el;
+        }
+      }
+
+      if(!best || bestScore < 6) return false;
+
+      try{
+        best.scrollIntoView({block:'center', inline:'center'});
+      }catch(e){}
+
+      try{
+        best.click();
+        return true;
+      }catch(e){
+        try{
+          best.dispatchEvent(new MouseEvent('click', {bubbles:true, cancelable:true, view:window}));
+          return true;
+        }catch(e2){}
+      }
+      return false;
+    """
+
+    clicked = False
     try:
-        WebDriverWait(driver, timeout).until(arrived)
-        debug(payload, f"PastaDigital: URL atual {driver.current_url}")
-    except TimeoutException:
-        debug(payload, "PastaDigital: timeout ao abrir; tentando corpo com URL…")
+        clicked = bool(driver.execute_script(js_click_visualizar))
+    except Exception:
+        clicked = False
+
+    if not clicked and href:
+        debug(payload, "PastaDigital: não achei/clickou 'Visualizar autos'. Usando href como fallback…")
+        # tenta abrir como popup/aba (mais parecido com clique)
         try:
-            body = driver.find_element(By.TAG_NAME, "body").text.strip()
-            if body.startswith("http"): driver.get(body)
-        except Exception: pass
+            driver.execute_script("window.open(arguments[0], '_blank');", href)
+            clicked = True
+        except Exception:
+            driver.get(href)
+            clicked = True
+
+    if not clicked:
+        raise TimeoutException("PastaDigital: não consegui abrir (sem clique e sem href).")
+
+    # aguarda: nova aba OU URL/página de pasta digital
+    def arrived(_drv):
+        try:
+            handles = _drv.window_handles
+            if len(handles) > len(old_handles):
+                _drv.switch_to.window(handles[-1])
+
+            url = (_drv.current_url or "").lower()
+            if "pastadigital" in url:
+                return True
+
+            # em alguns casos o body vem só com uma URL (redirecionamento “texto”)
+            try:
+                body = (_drv.find_element(By.TAG_NAME, "body").text or "").strip()
+            except Exception:
+                body = ""
+
+            if body.startswith("http"):
+                _drv.get(body)
+                return True
+
+            # ou a pasta digital já está carregando (elementos típicos)
+            if _drv.find_elements(By.CSS_SELECTOR, "#divArvore, #arvore_documentos, #divBotoes, #divBotoesInterna"):
+                return True
+
+        except Exception:
+            return False
+        return False
+
+    try:
+        wait.until(arrived)
+        debug(payload, f"PastaDigital: URL atual {driver.current_url}")
+        return True
+    except TimeoutException:
+        debug(payload, f"PastaDigital: timeout (URL atual: {getattr(driver, 'current_url', None)})")
+        return False
+
 
 def _enable_downloads(driver, download_dir: Path, payload=None):
     download_dir.mkdir(parents=True, exist_ok=True)
@@ -1084,144 +1292,241 @@ def _await_new_pdf(download_dir: Path, before_set: set, timeout: int, payload=No
 # ------------------------------------------------------------
 # Baixar PDF (com TURBO + fallback automático + anti-alerta)
 # ------------------------------------------------------------
-def _baixar_todos_pasta_digital(wait, driver, download_dir: Path, payload, timeout=240, turbo_download=False):
+def _baixar_todos_pasta_digital(wait, driver, download_dir, payload, timeout=300, turbo_download=False):
+    """
+    Versão v12 (Busca Universal):
+    - Não depende do nome 'frameDocumento'.
+    - Varre a janela principal e TODOS os iframes procurando checkboxes.
+    - Se o botão 'Selecionar Todas' falhar, marca os checkboxes manualmente um por um via JS.
+    - Usa o 'Link Oculto' para baixar sem travamentos.
+    """
+    import time, os, shutil
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support import expected_conditions as EC
+    
+    # Configura caminhos
+    target_dir = os.path.abspath(download_dir)
+    fallback_dir = os.path.join(os.path.expanduser("~"), "Downloads")
+    
+    # Força CDP
     try:
-        iframe_id = "frameDocumento"
+        driver.execute_cdp_cmd("Browser.setDownloadBehavior", {
+            "behavior": "allow", "downloadPath": target_dir, "eventsEnabled": True
+        })
+    except: pass
+
+    # Identifica Janela Atual
+    try: popup_handle = driver.current_window_handle
+    except: return []
+
+    def _focar_popup():
         try:
-            wait.until(EC.frame_to_be_available_and_switch_to_it((By.ID, iframe_id)))
-            debug(payload, f"Iframe {iframe_id} (ID).")
-        except TimeoutException:
-            try:
-                wait.until(EC.frame_to_be_available_and_switch_to_it((By.NAME, iframe_id)))
-                debug(payload, f"Iframe {iframe_id} (NAME).")
-            except TimeoutException:
-                debug(payload, f"AVISO: Iframe '{iframe_id}' não encontrado. Prosseguindo na página principal.")
+            if driver.current_window_handle != popup_handle:
+                driver.switch_to.window(popup_handle)
+            return True
+        except: return False
 
-        _enable_downloads(driver, download_dir, payload)
-
-        # normal x turbo (fallback para turbo se árvore demorar)
-        use_turbo = bool(turbo_download)
-        if not use_turbo:
-            try:
-                debug(payload, "Esperando árvore/botões (máx. 12s)…")
-                start = time.time()
-                wait_short = WebDriverWait(driver, 12)
-                wait_short.until(EC.any_of(
-                    EC.presence_of_element_located((By.ID, "divBotoes")),
-                    EC.presence_of_element_located((By.ID, "divBotoesInterna")),
-                    EC.presence_of_element_located((By.ID, "arvore_documentos")),
-                ))
-                remain = max(1, 12 - int(time.time() - start))
-                WebDriverWait(driver, remain).until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, "#arvore_documentos"))
-                )
-                debug(payload, "Estrutura presente (tentará seleção normal).")
-            except TimeoutException:
-                debug(payload, "Árvore lenta. Caindo para TURBO…")
-                use_turbo = True
-
-        # seleção robusta
-        if not use_turbo:
-            selected = _ensure_some_selected(driver, payload, min_count=1, expand=False)
-            if selected == 0:
-                debug(payload, "Nada selecionado no fluxo normal; tentando jstree (expande + clicks)…")
-                selected = _ensure_some_selected(driver, payload, min_count=1, expand=True)
-        else:
-            debug(payload, "TURBO: tentativa direta (jstree + JS)…")
-            selected = _ensure_some_selected(driver, payload, min_count=1, expand=True, max_clicks=400)
-
-        if selected == 0:
-            debug(payload, "ERRO: não consegui selecionar nenhum item na árvore. Prosseguindo para tentar salvar (anti-alerta cuidará).")
-
-        handles_before = driver.window_handles[:]
-        antes = {p.name for p in download_dir.glob("*.pdf")}
-        last_pdf_url = None
-
-        # acionar Baixar PDF
-        clicked = False
-        js_click_save = r"""
-          (function(){
-            const candIds = ['salvarButton','btnSalvar','btSalvar'];
-            for (const id of candIds){
-              const btn = document.getElementById(id);
-              if (btn){ btn.removeAttribute('disabled'); btn.click(); return 'btn:'+id; }
-            }
-            if (typeof salvarDocumento === 'function'){ try{ salvarDocumento(); return 'fn:salvarDocumento'; }catch(e){} }
-            if (typeof salvar === 'function'){ try{ salvar(); return 'fn:salvar'; }catch(e){} }
-            if (typeof versaoParaImpressao === 'function'){ try{ versaoParaImpressao(); return 'fn:versaoParaImpressao'; }catch(e){} }
-            return null;
-          })();
-        """
-        try:
-            how = driver.execute_script(js_click_save)
-            if how: clicked = True; debug(payload, f"Disparou salvar via {how}.")
-        except Exception as e:
-            debug(payload, f"Erro ao disparar salvar via JS: {e}")
-
-        if not clicked:
-            _click_footer_button(wait, driver, "baixar pdf", payload) or _click_footer_button(wait, driver, "versão para impressão", payload)
-
-        # alerta "Selecione..."
-        time.sleep(0.4)
-        try:
-            body_txt = (driver.find_element(By.TAG_NAME, "body").text or "").lower()
-        except Exception:
-            body_txt = ""
-        if "selecione pelo menos um item da árvore" in body_txt:
-            _dismiss_select_alert_and_retry(driver, payload)
-
-        # modais
-        try: _handle_print_modal_continue(wait, driver, payload, prefer="single", timeout=12 if use_turbo else 20)
-        except Exception: pass
-        try:
-            _handle_print_modal_save(wait, driver, payload, timeout=120 if use_turbo else 240)
-            _force_open_download_url(driver, payload)
-        except Exception: pass
-
-        # nova aba / download
-        try:
-            WebDriverWait(driver, 30 if use_turbo else 60).until(
-                lambda d: len(d.window_handles) > len(handles_before) or any(download_dir.glob("*.pdf"))
-            )
-            if len(driver.window_handles) > len(handles_before):
-                driver.switch_to.window(driver.window_handles[-1])
-                debug(payload, f"Aba nova: {driver.current_url}")
-                last_pdf_url = driver.current_url
-                _enable_downloads(driver, download_dir, payload)
-        except Exception:
-            try: _handle_print_modal_save(wait, driver, payload, timeout=90)
-            except Exception: pass
-            try: _force_open_download_url(driver, payload)
-            except Exception: pass
-            try:
-                last_pdf_url = driver.current_url
-            except Exception:
-                last_pdf_url = None
-
-        pdf = _await_new_pdf(download_dir, antes, 120 if use_turbo else timeout, payload)
-        if pdf and not _has_pdf_500_banner(driver):
-            debug(payload, "Download OK."); return [pdf]
-
-        _close_pdf_banner_if_present(driver, payload)
-
-        # Fallback HTTP
-        if not pdf:
-            referer = None
-            try: referer = driver.current_url
-            except Exception: pass
-            fallback_url = last_pdf_url or referer
-            if fallback_url and ("getPDFImpressao.do" in fallback_url or fallback_url.lower().endswith(".pdf")):
-                debug(payload, "Tentando fallback HTTP (cookies) para baixar o PDF…")
-                alt = _http_download_with_cookies(fallback_url, driver, download_dir, referer=referer, timeout=180)
-                if alt:
-                    debug(payload, f"Fallback OK: {alt}")
-                    return [alt]
-
-        raise TimeoutException("Falha no download direto.")
-    finally:
+    # --- Função Inteligente de Seleção ---
+    def _tentar_selecionar_em_qualquer_lugar():
+        # 1. Tenta na Janela Principal (Default Content)
         driver.switch_to.default_content()
-        debug(payload, "Contexto: default content.")
+        
+        # Tenta clicar no botão "Selecionar Todas"
+        clicou_botao = driver.execute_script("""
+            var b = document.getElementById('selecionarButton') || 
+                    document.getElementById('btSelecionar') || 
+                    document.querySelector('input[title*="Selecionar todas"]');
+            if(b) { b.click(); return true; }
+            return false;
+        """)
+        
+        # Conta itens
+        qtd = driver.execute_script("""
+            return document.querySelectorAll('.jstree-checked').length || 
+                   document.querySelectorAll('input[type=checkbox]:checked').length;
+        """)
+        
+        if qtd > 0: return qtd
 
+        # 2. Se não achou/selecionou, VARRE TODOS OS IFRAMES
+        iframes = driver.find_elements(By.TAG_NAME, "iframe")
+        for i, frame in enumerate(iframes):
+            try:
+                driver.switch_to.default_content()
+                driver.switch_to.frame(frame)
+                
+                # Tenta botão dentro do frame
+                if not clicou_botao:
+                    driver.execute_script("""
+                        var b = document.getElementById('selecionarButton');
+                        if(b) b.click();
+                    """)
+                
+                # Tenta marcar checkboxes na força bruta (se o botão falhou)
+                driver.execute_script("""
+                    var inputs = document.querySelectorAll('input[type=checkbox]');
+                    for(var i=0; i<inputs.length; i++) {
+                        if(!inputs[i].checked && (inputs[i].id.indexOf('chkDocumento') !== -1 || inputs[i].name.indexOf('chk') !== -1)) {
+                            inputs[i].click();
+                        }
+                    }
+                """)
+                
+                # Conta
+                qtd = driver.execute_script("""
+                    return document.querySelectorAll('.jstree-checked').length || 
+                           document.querySelectorAll('input[type=checkbox]:checked').length;
+                """)
+                
+                if qtd > 0:
+                    debug(payload, f"Itens encontrados no Iframe {i}!")
+                    return qtd
+            except: pass
+            
+        return 0
+
+    # -----------------------------------------------------------
+    debug(payload, "PastaDigital: Iniciando protocolo v12 (Busca Universal)...")
+    sucesso_inicio_download = False
+    
+    for tentativa in range(1, 4):
+        if not _focar_popup(): break
+        debug(payload, f"PastaDigital: Ciclo {tentativa}/3...")
+        
+        # A. Seleção (Varredura)
+        qtd = 0
+        for _ in range(3):
+            qtd = _tentar_selecionar_em_qualquer_lugar()
+            if qtd > 0: break
+            time.sleep(1.5)
+            
+        debug(payload, f"Itens selecionados: {qtd}")
+        
+        if qtd == 0: 
+            if tentativa < 3: 
+                time.sleep(2); continue
+            else: 
+                # Última tentativa: tenta salvar mesmo sem contagem (vai que é bug visual)
+                pass
+
+        # B. Botão Salvar Inicial
+        _focar_popup()
+        driver.switch_to.default_content()
+        driver.execute_script("var b=document.getElementById('btSalvar')||document.getElementById('salvarButton'); if(b) b.click();")
+        time.sleep(2)
+
+        # C. Confirmação e Captura do Link
+        try:
+            # Opção Arquivo Único
+            driver.execute_script("var r=document.getElementById('opcao1'); if(r){r.click(); r.checked=true;}")
+            
+            # Clica em Confirmar/Continuar para gerar o PDF
+            driver.execute_script("""
+                var btn = document.getElementById('btConfirmar') || document.getElementById('botaoContinuar');
+                if(btn && btn.offsetParent) btn.click();
+            """)
+            
+            debug(payload, "Aguardando geração do PDF (Link oculto)...")
+            
+            # --- Ler o input hidden ---
+            url_pdf = None
+            for i in range(60): # Espera até 60s
+                _focar_popup()
+                url_pdf = driver.execute_script("""
+                    var input = document.getElementById('urlAcessoArquivo');
+                    return (input && input.value && input.value.indexOf('http') !== -1) ? input.value : null;
+                """)
+                
+                if url_pdf:
+                    debug(payload, "Link oculto capturado com sucesso!")
+                    break
+                
+                # Fallback: Tenta clicar no botão se ele aparecer
+                if i > 5:
+                    clicou = driver.execute_script("""
+                        var b=document.getElementById('btBaixarDocumento')||document.getElementById('btnDownloadDocumento'); 
+                        if(b && !b.disabled && b.offsetParent) { b.click(); return true; }
+                        return false;
+                    """)
+                    if clicou: 
+                        debug(payload, "Cliquei no botão visual (fallback).")
+                        sucesso_inicio_download = True
+                        break
+                
+                time.sleep(1)
+            
+            if url_pdf:
+                debug(payload, "Baixando via URL direta...")
+                driver.get(url_pdf)
+                sucesso_inicio_download = True
+                break 
+                
+        except Exception as e:
+            debug(payload, f"Erro modal: {e}")
+
+        # Fecha alerta se houver
+        try: 
+            _focar_popup()
+            alert = driver.switch_to.alert
+            if "selecione" in alert.text.lower(): 
+                debug(payload, "Alerta de seleção vazia. Retentando...")
+                alert.accept()
+        except: pass
+
+    if not sucesso_inicio_download:
+        debug(payload, "PastaDigital: Falha. Não consegui baixar.")
+        try: driver.close()
+        except: pass
+        return []
+
+    # Monitoramento Final
+    debug(payload, f"Aguardando arquivo no disco...")
+    end = time.time() + timeout
+    arquivo_final = None
+    
+    while time.time() < end:
+        pastas = [target_dir, fallback_dir]
+        for p in pastas:
+            if not os.path.exists(p): continue
+            try:
+                files = sorted([os.path.join(p, x) for x in os.listdir(p)], key=os.path.getmtime, reverse=True)
+                if not files: continue
+                cand = files[0]
+                
+                if (time.time() - os.path.getmtime(cand) < 60):
+                    if cand.endswith(".crdownload") or cand.endswith(".tmp"):
+                        time.sleep(1); break 
+                    
+                    if cand.lower().endswith(".pdf") and os.path.getsize(cand) > 100:
+                        # Estabilidade
+                        s1 = os.path.getsize(cand); time.sleep(1); s2 = os.path.getsize(cand)
+                        if s1 == s2:
+                            if p == fallback_dir:
+                                dest = os.path.join(target_dir, os.path.basename(cand))
+                                try: shutil.move(cand, dest); arquivo_final = dest
+                                except: arquivo_final = cand
+                            else:
+                                arquivo_final = cand
+                            break
+            except: pass
+        
+        if arquivo_final: break
+        time.sleep(1)
+
+    try:
+        handles = driver.window_handles
+        for h in handles:
+            if h != driver.window_handles[0]: 
+                driver.switch_to.window(h)
+                driver.close()
+        driver.switch_to.window(driver.window_handles[0])
+    except: pass
+
+    if arquivo_final:
+        debug(payload, f"Download Sucesso: {os.path.basename(arquivo_final)}")
+        return [str(arquivo_final)]
+    
+    return []
 # ------------------------------------------------------------
 # Lista + paginação
 # ------------------------------------------------------------
@@ -1263,63 +1568,111 @@ def _click_next_page(wait, driver, payload) -> bool:
         return False
 
 def _iterar_precatorios_da_lista(wait, driver, baixar_pdf, download_dir, payload, turbo_download=False):
-    xp_link_no_item = ".//a[contains(@class,'linkProcesso') or contains(@class,'numeroProcesso') or self::a]"
-    def _espera_lista():
-        wait.until(EC.any_of(
-            EC.presence_of_all_elements_located((By.CSS_SELECTOR, "a.linkProcesso, a[class*='numeroProcesso']")),
-            EC.presence_of_all_elements_located((By.CSS_SELECTOR, "div.classeProcesso")),
-        ))
-    def _coleta_precatorios():
-        divs = driver.find_elements(By.CSS_SELECTOR, "div.classeProcesso")
-        hits = []
-        for d in divs:
-            try:
-                raw = d.get_attribute("textContent")
-                if "precatorio" in _norm_txt(raw):
-                    li = d.find_element(By.XPATH, "ancestor::li[1]")
-                    hits.append(li)
-            except Exception:
-                continue
-        return hits
-    total = 0
-    while True:
-        _espera_lista(); time.sleep(0.2)
-        itens = _coleta_precatorios()
-        debug(payload, f"Lista: {len(itens)} item(ns) 'Precatório' nesta página.")
-        idx = 0
-        while idx < len(itens):
-            _espera_lista(); itens = _coleta_precatorios()
-            if idx >= len(itens): break
-            li = itens[idx]
-            try:
-                link = li.find_element(By.XPATH, xp_link_no_item)
-            except Exception:
-                idx += 1; continue
-            driver.execute_script("arguments[0].scrollIntoView({block:'center'});", link)
-            try: link.click()
-            except Exception: driver.execute_script("arguments[0].click();", link)
-            wait.until(EC.presence_of_element_located((By.ID, "numeroProcesso")))
-            _, data = _extract_details_from_detail_page(driver)
-            payload["results"].append(data)
-            if data.get("is_precatorio"): payload["has_precatorio"] = True
-            debug(payload, f"Detalhe: {data.get('numero_processo')} | classe='{data.get('classe_processo')}'")
-            if baixar_pdf and data.get("link_pasta_digital"):
-                try:
-                    _open_pasta_digital(wait, driver, data["link_pasta_digital"], payload)
-                    files = _baixar_todos_pasta_digital(wait, driver, Path(download_dir), payload, turbo_download=turbo_download)
-                    payload.setdefault("downloaded_files", []).extend(files)
-                except Exception as e:
-                    payload.setdefault("download_errors", []).append(str(e))
-            driver.back()
-            try: _espera_lista()
-            except TimeoutException:
-                driver.back(); _espera_lista()
-            total += 1; idx += 1
-            debug(payload, f"Voltou p/ lista. Total processados: {total}.")
-        if not _click_next_page(wait, driver, payload): break
-    debug(payload, f"Concluído: {total} 'Precatório'(s) processado(s).")
-    return total
+    """
+    Versão Linear Estrita:
+    1. Coleta todas as URLs da lista primeiro.
+    2. Processa uma por uma sequencialmente.
+    3. Garante limpeza total de janelas entre um processo e outro.
+    """
+    import time
+    from selenium.webdriver.common.by import By
+    
+    # 1. Coleta URLs (sem navegar ainda)
+    urls_para_processar = []
+    try:
+        wait.until(EC.presence_of_element_located((By.ID, "listagemDeProcessos")))
+        # Pega todos os links visíveis
+        links = driver.find_elements(By.CSS_SELECTOR, "#listagemDeProcessos a.linkProcesso")
+        for lnk in links:
+            url = lnk.get_attribute("href")
+            txt = lnk.text.strip()
+            # Filtra simples para garantir que é processo
+            if url and ("processo.codigo" in url):
+                urls_para_processar.append((txt, url))
+    except Exception as e:
+        debug(payload, f"Erro ao ler lista de processos: {e}")
+        return 0
 
+    total = len(urls_para_processar)
+    debug(payload, f"Lista: Encontrei {total} processos. Iniciando processamento sequencial...")
+    
+    sucesso_count = 0
+    janela_principal = driver.current_window_handle
+
+    # 2. Loop Sequencial (Um por vez, do início ao fim)
+    for i, (proc_nome, proc_url) in enumerate(urls_para_processar):
+        debug(payload, f"--- Processando {i+1}/{total}: {proc_nome} ---")
+        
+        try:
+            # A. Navega para o processo (Resetando o estado)
+            driver.get(proc_url)
+            
+            # B. Extrai dados e Valida se é Precatório
+            try:
+                wait.until(EC.presence_of_element_located((By.ID, "numeroProcesso")))
+                nr, data = _extract_details_from_detail_page(driver)
+                
+                # Se não for precatório, pula (opcional, ajustável conforme sua regra)
+                if not data.get("is_precatorio"):
+                    debug(payload, f"Ignorando {proc_nome}: Não parece precatório.")
+                    continue
+                
+                payload["results"].append(data)
+                payload["has_precatorio"] = True
+                if nr and nr not in payload["found_process_numbers"]:
+                    payload["found_process_numbers"].append(nr)
+
+            except Exception as e:
+                debug(payload, f"Erro ao ler detalhes de {proc_nome}: {e}")
+                continue
+
+            # C. Inicia Operação de Download (Pasta Digital)
+            if baixar_pdf:
+                # 1. Abre a Pasta Digital
+                if data.get("link_pasta_digital"):
+                    _open_pasta_digital(wait, driver, data["link_pasta_digital"], payload)
+                else:
+                    _click_visualizar_autos(wait, driver, payload)
+                
+                # 2. Executa o Download na Janela da Pasta
+                # A função _baixar_todos... já cuida de focar na janela certa
+                files = _baixar_todos_pasta_digital(
+                    wait, driver, Path(download_dir), payload, 
+                    timeout=300, turbo_download=turbo_download
+                )
+                
+                if files:
+                    payload.setdefault("downloaded_files", []).extend(files)
+                    debug(payload, f"Sucesso no download de {proc_nome}")
+                else:
+                    debug(payload, f"Falha no download de {proc_nome}")
+
+        except Exception as e:
+            debug(payload, f"Erro crítico processando {proc_nome}: {e}")
+
+        finally:
+            # D. LIMPEZA TOTAL (O Segredo)
+            # Fecha todas as janelas exceto a principal para o próximo ciclo começar limpo
+            try:
+                atuais = driver.window_handles
+                for h in atuais:
+                    if h != janela_principal:
+                        driver.switch_to.window(h)
+                        driver.close()
+                # Volta o foco para a principal
+                driver.switch_to.window(janela_principal)
+            except Exception as e:
+                debug(payload, f"Erro na limpeza de janelas: {e}")
+                # Se perder a principal, tenta recuperar a última
+                if driver.window_handles:
+                    driver.switch_to.window(driver.window_handles[0])
+                    janela_principal = driver.window_handles[0]
+
+        sucesso_count += 1
+        # Pequena pausa para o servidor respirar
+        time.sleep(2)
+
+    return sucesso_count
 # ------------------------------------------------------------
 # Fechamento de abas e sessão
 # ------------------------------------------------------------
@@ -1344,6 +1697,159 @@ def _close_extra_tabs(driver, baseline_handles, payload=None):
     except Exception:
         pass
 
+def _click_visualizar_autos(wait, driver, payload=None, timeout=20):
+    import time
+    
+    debug(payload, "Visualizar Autos: Preparando clique...")
+    
+    # 1. Memoriza as janelas abertas antes do clique
+    janelas_antes = set(driver.window_handles)
+
+    # 2. Tenta encontrar o link/botão
+    try:
+        # Tenta pelo ID, removendo bloqueios de acessibilidade
+        driver.execute_script("""
+            var btn = document.getElementById('linkPasta');
+            if(btn) {
+                btn.removeAttribute('aria-hidden'); 
+                btn.style.display = 'block';
+                btn.click();
+            } else {
+                // Fallback para classe se o ID mudar
+                var l = document.querySelector('a.linkPasta');
+                if(l) l.click();
+            }
+        """)
+        debug(payload, "Visualizar Autos: Clique enviado via JS.")
+    except Exception as e:
+        debug(payload, f"Erro no clique: {e}")
+        return False
+
+    # 3. Monitora o resultado (Nova Janela ou Modal)
+    end = time.time() + timeout
+    while time.time() < end:
+        # A. Verifica se abriu NOVA JANELA (Pop-up)
+        janelas_agora = set(driver.window_handles)
+        novas = janelas_agora - janelas_antes
+        if novas:
+            nova_aba = list(novas)[-1]
+            driver.switch_to.window(nova_aba)
+            debug(payload, f"Visualizar Autos: Sucesso! Nova aba detectada: {driver.current_url}")
+            return True
+
+        # B. Verifica se abriu o MODAL de Senha (para quem não está 100% logado)
+        try:
+            modal_btn = driver.execute_script("""
+                var b = document.querySelector('#botaoEnviarSenha, #botaoConfirmar, #popupSenha button');
+                if(b && b.offsetParent !== null) { b.click(); return 'clicado'; }
+                return null;
+            """)
+            if modal_btn:
+                debug(payload, "Visualizar Autos: Modal de senha detectado e confirmado.")
+                time.sleep(2) # Espera o modal processar e abrir a janela
+        except: pass
+
+        # C. Verifica se carregou na MESMA aba (redirecionamento)
+        if "pastadigital" in (driver.current_url or "").lower():
+            debug(payload, "Visualizar Autos: Sucesso! Carregou na mesma aba.")
+            return True
+            
+        time.sleep(0.5)
+
+    debug(payload, "Visualizar Autos: Falha. O pop-up não abriu a tempo (verifique bloqueador de pop-up).")
+    return False
+
+def _login_proativo(wait, driver, payload):
+    """
+    Login 'Pessimista': Assume que precisa logar.
+    Aguarda elementos carregarem antes de decidir e monitora a URL.
+    """
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support import expected_conditions as EC
+    import time
+
+    # URL que força o redirecionamento para o login
+    URL_LOGIN = "https://esaj.tjsp.jus.br/sajcas/login?service=https%3A%2F%2Fesaj.tjsp.jus.br%2Fcpopg%2FabrirConsultaDeRequisitorios.do"
+    
+    debug(payload, "Login: Acessando tela de autenticação...")
+    driver.get(URL_LOGIN)
+    
+    # 1. Análise do Estado Atual (com espera)
+    precisa_logar = False
+    try:
+        # Espera até 5 segundos para ver se o botão "Identificar-se" aparece
+        # Se aparecer, é porque NÃO estamos logados.
+        wait.until(EC.visibility_of_element_located((By.PARTIAL_LINK_TEXT, "Identificar-se")))
+        debug(payload, "Login: Botão 'Identificar-se' detectado. Necessário autenticar.")
+        precisa_logar = True
+    except:
+        # Se deu timeout, verificamos se já estamos na URL interna
+        # Se a URL ainda tiver 'sajcas', é porque o carregamento está lento, então FORÇAMOS o login
+        if "sajcas" in driver.current_url:
+            debug(payload, "Login: Ainda na URL de login. Forçando tentativa.")
+            precisa_logar = True
+        else:
+            debug(payload, "Login: Parece que já estamos logados (URL interna).")
+            return True
+
+    if not precisa_logar:
+        return True
+
+    # 2. Execução do Login (Passo a Passo Lento)
+    try:
+        # A. Seleciona a aba CERTIFICADO DIGITAL
+        debug(payload, "Login: Selecionando aba Certificado...")
+        try:
+            # Tenta clicar na aba pelo ID ou Link
+            aba = wait.until(EC.element_to_be_clickable((By.ID, "aba-certificado")))
+            aba.click()
+        except:
+            # Fallback via JS
+            driver.execute_script("var a=document.getElementById('aba-certificado'); if(a) a.click();")
+        
+        time.sleep(2) # Espera a aba mudar e o componente carregar
+
+        # B. Clica no Botão ENTRAR (submitCertificado)
+        debug(payload, "Login: Clicando em 'Entrar'...")
+        
+        # Garante que o botão está visível
+        btn_entrar = wait.until(EC.visibility_of_element_located((By.ID, "submitCertificado")))
+        
+        # Tenta clicar
+        driver.execute_script("arguments[0].click();", btn_entrar)
+        
+        # 3. Espera a Mágica Acontecer (Certificado do Windows + Redirecionamento)
+        # Dá até 30 segundos para o navegador processar o certificado e mudar de página
+        debug(payload, "Login: Aguardando redirecionamento do sistema...")
+        
+        start_wait = time.time()
+        sucesso = False
+        while time.time() - start_wait < 30:
+            # Se a URL não tem mais "sajcas", deu certo!
+            if "sajcas" not in driver.current_url:
+                debug(payload, "Login: Sucesso! URL mudou (saímos do login).")
+                sucesso = True
+                break
+            
+            # Se ainda estiver na página, tenta clicar de novo a cada 5 segundos (caso o clique tenha falhado)
+            if int(time.time()) % 5 == 0:
+                try:
+                    driver.execute_script("var b=document.getElementById('submitCertificado'); if(b) b.click();")
+                except: pass
+            
+            time.sleep(1)
+
+        if sucesso:
+            time.sleep(3) # Tempo extra para o cookie firmar
+            return True
+        else:
+            debug(payload, "Login: Alerta - Tempo esgotado e ainda estamos na URL de login.")
+            return False
+
+    except Exception as e:
+        debug(payload, f"Login: Erro durante o processo: {e}")
+        # Tenta seguir mesmo com erro
+        return False
 # ------------------------------------------------------------
 # Fluxo principal
 # ------------------------------------------------------------
@@ -1354,173 +1860,269 @@ def _close_extra_tabs(driver, baseline_handles, payload=None):
 # ------------------------------------------------------------
 # Fluxo principal
 # ------------------------------------------------------------
-def go_and_extract(doc_number=None, attach=False, user_data_dir=None,
+def go_and_extract(doc_number=None, attach_debugger=False, user_data_dir=None,
                    cert_issuer_cn=None, cert_subject_cn=None,
                    debugger_address=None, cas_usuario=None, cas_senha=None,
                    abrir_autos=False, baixar_pdf=False, download_dir="downloads",
                    process_number=None, turbo_download=False,
                    headless=False):
+    
+    # Define o rótulo (Processo ou Documento)
     label_input = process_number if process_number else doc_number
-    payload = {"documento": doc_number, "processo": process_number, "ok": False, "has_precatorio": False,
-               "found_process_numbers": [], "results": [], "error": None, "downloaded_files": [],
-               "started_at": _now_str(), "finished_at": None}
+    
+    # Payload Inicial
+    payload = {
+        "documento": doc_number, 
+        "processo": process_number, 
+        "ok": False, 
+        "has_precatorio": False,
+        "found_process_numbers": [], 
+        "results": [], 
+        "error": None, 
+        "downloaded_files": [],
+        "started_at": _now_str(), 
+        "finished_at": None
+    }
+    
     t0 = time.perf_counter()
     driver = None
     baseline_handles = set()
+
     try:
-        # cria Chrome com prefs de download + headless se pedido
+        # 1. Conecta/Abre o Chrome
+        #driver = _build_chrome(attach=attach_debugger, debugger_address=debugger_address, download_dir=download_dir)
+
+        # 1. Conecta/Abre o Chrome
         driver = _build_chrome(
-            attach, user_data_dir, cert_issuer_cn, cert_subject_cn,
-            debugger_address=debugger_address, headless=headless, download_dir=download_dir
+            user_data_dir=user_data_dir,
+            cert_issuer_cn=cert_issuer_cn,
+            cert_subject_cn=cert_subject_cn,
+            attach=attach_debugger,
+            debugger_address=debugger_address,
+            download_dir=download_dir
         )
-        ### MUDANÇA 1: Aumentar o tempo de espera padrão para acomodar downloads lentos ###
-        wait = WebDriverWait(driver, 60); driver.set_script_timeout(300)
 
-        # abas existentes no início
+        wait = WebDriverWait(driver, 20)
+
+        # Captura abas iniciais para não fechar o que não deve depois
+        try: baseline_handles = set(driver.window_handles)
+        except: baseline_handles = set()
+
+        # ------------------------------------------------------------------
+        # [CRÍTICO] 1. Login Proativo Obrigatório
+        # ------------------------------------------------------------------
+        # Tenta autenticar antes de qualquer navegação de busca
+        if not _login_proativo(wait, driver, payload):
+             # Se falhar no login, não adianta prosseguir
+             raise Exception("Falha crítica na autenticação inicial (Login/Certificado).")
+        
+        # Pausa tática para garantir propagação da sessão
+        time.sleep(1)
+
+        # ------------------------------------------------------------------
+        # 2. Navegação para a Busca
+        # ------------------------------------------------------------------
+        # Se tiver número de processo, busca direto. Se for documento, usa a URL de DOC.
+        base_requisitorios = "https://esaj.tjsp.jus.br/cpopg/abrirConsultaDeRequisitorios.do"
+        
+        # 2. Navegação para a Busca (SEMPRE REQUISITÓRIOS)
+        # Forçamos a URL correta para garantir acesso à Pasta Digital de Precatórios
+        base_requisitorios = "https://esaj.tjsp.jus.br/cpopg/abrirConsultaDeRequisitorios.do"
+
+        if process_number:
+             # Se for processo, vamos para a tela de requisitórios limpa
+             url_busca = base_requisitorios
+        else:
+             # Se for documento, já montamos a query string
+             url_busca = f"https://esaj.tjsp.jus.br/cpopg/search.do?conversationId=&cbPesquisa=DOCPARTE&dadosConsulta.valorConsulta={doc_number}&consultaDeRequisitorios=true"
+        
+        driver.get(url_busca)
+        # Espera carregamento básico
         try:
-            baseline_handles = set(driver.window_handles)
-        except Exception:
-            baseline_handles = set()
+            wait.until(EC.presence_of_element_located((By.TAG_NAME, "form")))
+        except:
+            # Tenta recuperar se caiu em tela de erro
+            pass
 
-        debug(payload, "Abrindo tela de consulta…")
-        driver.get(BASE_URL); wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
-        _maybe_cas_login(wait, driver, cert_subject_cn, user=cas_usuario, pwd=cas_senha, payload=payload)
-              
-                # === GARANTIR QUE ESTAMOS NA TELA DE REQUISITÓRIOS ===
-        def _is_requisitorios_url(u: str) -> bool:
-            u = (u or "").lower()
-            return ("/cpopg/" in u) or ("abrirconsultaderequisitorios" in u)
-
-        try:
-            cur = (driver.current_url or "")
-        except Exception:
-            cur = ""
-
-        if not _is_requisitorios_url(cur):
-            # 1) Tentar clicar no menu "Requisitórios" da home do e-SAJ
-            try:
-                # tenta por texto normalizado
-                menu_xpath = (
-                    "//a[normalize-space()='Requisitórios' or contains(translate(.,"
-                    "'REQUISITORIOS','requisitorios'),'requisitorios')]"
-                )
-                el = WebDriverWait(driver, 5).until(
-                    EC.element_to_be_clickable((By.XPATH, menu_xpath))
-                )
-                driver.execute_script("arguments[0].scrollIntoView({block:'center'});", el)
-                try: el.click()
-                except Exception: driver.execute_script("arguments[0].click();", el)
-
-                WebDriverWait(driver, 10).until(lambda d: _is_requisitorios_url(d.current_url))
-            except Exception:
-                # 2) Se não houver menu ou falhou, ir direto para a BASE_URL
-                try:
-                    driver.get(BASE_URL)  # ex.: .../cpopg/abrirConsultaDeRequisitorios.do?gateway=true
-                except Exception:
-                    pass
-
-        # 3) Esperar que a página de consulta esteja carregada
-        try:
-            wait.until(EC.presence_of_element_located((By.ID, "cbPesquisa")))
-        except Exception:
-            # último recurso: abrir de novo a BASE_URL e esperar o seletor
-            driver.get(BASE_URL)
-            wait.until(EC.presence_of_element_located((By.ID, "cbPesquisa")))
-
+        # ------------------------------------------------------------------
+        # 3. Preenchimento e Força Bruta de Critérios
+        # ------------------------------------------------------------------
         if process_number:
             _select_criterio_processo(wait, driver, process_number)
         else:
-            _select_criterio_documento(wait, driver)
-            inp = wait.until(EC.visibility_of_element_located((By.ID, "campo_DOCPARTE")))
-            inp.clear(); inp.send_keys(doc_number)
+            # === CORREÇÃO CRÍTICA (DOCPARTE) ===
+            try:
+                # 1. Espera campo
+                inp = wait.until(EC.presence_of_element_located((By.ID, "campo_DOCPARTE")))
+                
+                # 2. Script para forçar a mudança visual e lógica do combo
+                driver.execute_script("""
+                    var sel = document.getElementById('cbPesquisa');
+                    if(sel) { sel.value = 'DOCPARTE'; sel.dispatchEvent(new Event('change')); }
+                    
+                    var radio = document.querySelector("input[type='radio'][value='DOCPARTE']");
+                    if(radio) radio.click();
 
+                    var divDoc = document.getElementById('DOCPARTE');
+                    if(divDoc) { divDoc.style.display = 'block'; divDoc.style.visibility = 'visible'; }
+                    
+                    var divProc = document.getElementById('NUMPROC');
+                    if(divProc) divProc.style.display = 'none';
+                """)
+                time.sleep(0.5)
+
+                # 3. Preenche valor
+                driver.execute_script("arguments[0].value = arguments[1];", inp, doc_number)
+                driver.execute_script("arguments[0].dispatchEvent(new Event('input'));", inp)
+                
+                debug(payload, f"Preenchi DOC e forcei critério DOCPARTE via JS: {doc_number}")
+            except Exception as e:
+                debug(payload, f"Erro ao preencher campos de busca: {e}")
+                # Não dá raise aqui, tenta clicar em consultar mesmo assim (vai que já estava preenchido)
+
+        # ------------------------------------------------------------------
+        # 4. Envio do Formulário (Consultar)
+        # ------------------------------------------------------------------
         if not _submit_consulta(wait, driver, payload):
-            raise TimeoutException("Não consegui acionar o 'Consultar'.")
+            raise TimeoutException("Não consegui clicar no botão 'Consultar'.")
+        
         debug(payload, "Consulta enviada.")
 
+        # ------------------------------------------------------------------
+        # 5. Análise do Resultado
+        # ------------------------------------------------------------------
         kind = _wait_result_page(driver, timeout=60, payload=payload)
-        if kind == "lista":
-            processos = driver.find_elements(By.CSS_SELECTOR, "a.linkProcesso, a[class*='numeroProcesso']")
-            found = _extract_process_numbers_from_elements(processos)
-            debug(payload, f"Resultados (lista): {len(found)} processo(s).")
+        
+        # A. Vazio
+        if kind == "vazio":
+            debug(payload, "Nenhum processo encontrado.")
+            payload["ok"] = True
+            payload["found_process_numbers"] = []
+
+        # B. Lista de Processos
+        elif kind == "lista":
+            # Coleta números visuais (Regex)
+            import re
+            links_texto = []
+            try:
+                elementos = driver.find_elements(By.TAG_NAME, "a")
+                for el in elementos:
+                    if el.is_displayed(): links_texto.append(el.text)
+            except: pass
+            
+            regex_cnj = re.compile(r"\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}")
+            encontrados = set()
+            for t in links_texto:
+                m = regex_cnj.search(t)
+                if m: encontrados.add(m.group(0))
+            
+            found = list(encontrados)
+            debug(payload, f"Resultados (lista): {len(found)} processo(s) identificados visualmente.")
             payload["found_process_numbers"] = found
+            
+            # === ITERAÇÃO SEQUENCIAL ===
             if abrir_autos:
-                _iterar_precatorios_da_lista(wait, driver, baixar_pdf, download_dir, payload, turbo_download=turbo_download)
+                # O payload é passado por referência e preenchido dentro da função
+                count = _iterar_precatorios_da_lista(wait, driver, baixar_pdf, download_dir, payload, turbo_download=turbo_download)
+                debug(payload, f"Fim da iteração. Total de Precatórios processados: {count}")
+
+        # C. Detalhe (Caiu direto num processo único)
         elif kind == "detalhe":
             numero, data = _extract_details_from_detail_page(driver)
+            
             if numero:
                 payload["results"].append(data)
                 payload["found_process_numbers"] = [numero]
-                if data.get("is_precatorio"): payload["has_precatorio"] = True
-                if abrir_autos and baixar_pdf and data.get("link_pasta_digital"):
-                    _open_pasta_digital(wait, driver, data["link_pasta_digital"], payload)
-                    try:
-                        ### MUDANÇA 2: Aumentar o timeout do download para 300s (5 minutos) ###
-                        files = _baixar_todos_pasta_digital(wait, driver, Path(download_dir), payload, timeout=300, turbo_download=turbo_download)
-                        ### MUDANÇA 3: Descomentar a linha para registrar os arquivos baixados ###
-                        payload.setdefault("downloaded_files", []).extend(files)
-                    except Exception as e:
-                        payload.setdefault("download_errors", []).append(str(e))
-        else:
-            raise TimeoutException("Depois do submit não encontrei lista nem detalhe.")
+                
+                if data.get("is_precatorio"):
+                    payload["has_precatorio"] = True
+                
+                if abrir_autos:
+                    debug(payload, "Processo único: Tentando abrir autos...")
+                    # 1. Tenta abrir Pasta Digital
+                    sucesso_abertura = False
+                    if data.get("link_pasta_digital"):
+                        sucesso_abertura = _open_pasta_digital(wait, driver, data["link_pasta_digital"], payload)
+                    
+                    if not sucesso_abertura:
+                        sucesso_abertura = _click_visualizar_autos(wait, driver, payload, timeout=25)
 
-        ts = _ts_str()
-        safe = _slug(label_input)
-        scr = OUTPUT_DIR / f"screenshot_{safe}_{ts}.png"
-        driver.save_screenshot(str(scr))
+                    # 2. Se abriu, Baixa
+                    if sucesso_abertura and baixar_pdf:
+                        try:
+                            # Chama a versão v12 (Busca Universal)
+                            files = _baixar_todos_pasta_digital(
+                                wait, driver, Path(download_dir), payload,
+                                timeout=300, turbo_download=turbo_download
+                            )
+                            if files:
+                                payload.setdefault("downloaded_files", []).extend(files)
+                        except Exception as e:
+                            debug(payload, f"Erro no download único: {e}")
+                            payload.setdefault("download_errors", []).append(str(e))
+            else:
+                raise TimeoutException("Página de detalhe identificada, mas falha ao extrair número.")
+
+        else:
+            raise TimeoutException("Estado desconhecido após consulta (nem lista, nem detalhe, nem vazio).")
+
+        # ------------------------------------------------------------------
+        # Finalização de Sucesso
+        # ------------------------------------------------------------------
+        # Screenshot final de controle
+        try:
+            ts = _ts_str()
+            safe = _slug(label_input)
+            scr = OUTPUT_DIR / f"screenshot_{safe}_{ts}.png"
+            driver.save_screenshot(str(scr))
+            payload["screenshot_path"] = str(scr)
+        except: pass
+
+        payload["last_url"] = driver.current_url
+        payload["ok"] = True
         
-        ### MUDANÇA 4: Descomentar a linha para marcar a operação como SUCESSO (`ok: True`) ###
-        payload.update({"ok": True, "screenshot_path": str(scr), "last_url": driver.current_url})
-        
-        if payload.get("has_precatorio") or "consultaDeRequisitorios" in driver.current_url:
-            payload["has_precatorio"] = True
-            
+        # Cálculo de tempo
         payload["finished_at"] = _now_str()
         elapsed = time.perf_counter() - t0
         payload["duration_seconds"] = round(elapsed, 3)
-        ### MUDANÇA 5: Descomentar a linha de duração formatada (opcional, mas bom ter) ###
         payload["duration_hms"] = _fmt_duration(elapsed)
+        
         return payload
 
     except Exception as e:
-        # O bloco de erro permanece o mesmo
+        # Tratamento de Erro Global
         payload["error"] = f"{e.__class__.__name__}: {e}\n{traceback.format_exc()}"
         try: payload["last_url"] = driver.current_url if driver else None
-        except: payload["last_url"] = None
+        except: pass
+        
+        # Screenshot do Erro
         try:
             ts = _ts_str()
             safe = _slug(label_input)
             if driver:
-                p_html = OUTPUT_DIR / f"erro_{safe}_{ts}.html"
-                with open(p_html, "w", encoding="utf-8") as f: f.write(driver.page_source)
-                payload["error_html_path"] = str(p_html)
                 p_png = OUTPUT_DIR / f"erro_{safe}_{ts}.png"
                 driver.save_screenshot(str(p_png))
                 payload["error_screenshot_path"] = str(p_png)
-        except Exception: pass
+        except: pass
+        
         payload["finished_at"] = _now_str()
         elapsed = time.perf_counter() - t0
         payload["duration_seconds"] = round(elapsed, 3)
         payload["duration_hms"] = _fmt_duration(elapsed)
         return payload
+
     finally:
-        # O bloco finally permanece o mesmo
+        # Limpeza Final
         try:
             if driver:
+                # Fecha abas extras criadas durante a execução
                 _close_extra_tabs(driver, baseline_handles, payload)
-        except Exception:
-            pass
-        try:
-            if driver:
-                if not debugger_address:
+                
+                # Se não for debug, fecha o navegador
+                if not attach_debugger and not debugger_address:
                     driver.quit()
-                else:
-                    try:
-                        driver.close()
-                    except Exception:
-                        pass
-        except Exception:
-            pass
+        except: pass
+
 
 def main():
     p = argparse.ArgumentParser(description="Crawler ESAJ TJSP (Pasta Digital) — Documento da Parte OU Número do Processo (CNJ)")
@@ -1546,7 +2148,7 @@ def main():
         res = go_and_extract(
             doc_number=None,
             process_number=raw,
-            attach=args.attach,
+            attach_debugger=args.attach,
             user_data_dir=args.user_data_dir,
             cert_issuer_cn=args.cert_issuer_cn,
             cert_subject_cn=args.cert_subject_cn,
@@ -1568,7 +2170,7 @@ def main():
         res = go_and_extract(
             doc_number=doc,
             process_number=None,
-            attach=args.attach,
+            attach_debugger=args.attach,
             user_data_dir=args.user_data_dir,
             cert_issuer_cn=args.cert_issuer_cn,
             cert_subject_cn=args.cert_subject_cn,
